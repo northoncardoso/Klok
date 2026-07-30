@@ -1,0 +1,181 @@
+import { StyleSheet } from 'react-native';
+
+    const estilos = StyleSheet.create({
+        containerAbsolutoFuncionario: {
+            backgroundColor: "white",
+            width: "90%",
+            padding: 10,
+            margin: 20,
+            borderRadius: 15,
+            elevation: 2 //sombra
+        },
+        containerCriarNovoFuncionario: {
+            alignSelf: "center",
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "white",
+            width: 150,
+            height: 150,
+            margin: 50,
+            borderRadius: 15,
+            elevation: 2,
+        },
+        containerCima: {
+            flexGrow: 1,
+            flexDirection: "row",
+            justifyContent: "space-around"
+        },
+        containerImg: {
+            marginLeft: 10,
+            justifyContent: "center",
+        },
+        containerTexto: {
+            flex: 5,
+            justifyContent: "flex-end",
+        },
+        containerBaixo: {
+            flex: 3,
+            borderTopColor: "gray",
+            borderColor: "gray",
+            flexDirection: "row",
+            justifyContent: "space-around",
+        },
+        img: {
+            borderColor: "black",
+            borderRadius: 10,
+            width: 15,
+            height: 15,
+            backgroundColor: "black",
+            alignSelf: "center",
+            justifyContent: "center"
+        },
+        corpoImg: {
+            borderColor: "black",
+            borderRadius: 10,
+            width: 28,
+            height: 12,
+            backgroundColor: "black",
+            borderBottomLeftRadius: 2,
+            borderBottomRightRadius: 2,
+            alignSelf: "center",
+            justifyContent: "center",
+            top: 2
+        },
+        circuloImg: {
+            margin: 5,
+            width: 70,
+            height: 70,
+            borderRadius: 50,
+            borderWidth: 2,
+            backgroundColor: 'gainsboro',
+            justifyContent: "center"
+        },
+        textoColumn: {
+            margin: 7,
+            flexDirection: "column",
+            justifyContent: "center"
+        },
+        textoBold: {
+            fontWeight: "bold",
+            fontSize: 18
+        },
+        linhaDivisao: {
+            marginHorizontal: 10,
+            marginVertical: 5,
+            borderBottomColor: "gainsboro",
+            borderBottomWidth: StyleSheet.hairlineWidth //menor linha "pixivel" (possivel em pixel)
+        },
+        botaoLixeira: {
+            padding: 4,
+            borderRadius: 8,
+            backgroundColor: 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        lixeira: {
+            alignItems: 'center',
+        },
+        tampa: {
+            width: 16,
+            height: 4,
+            backgroundColor: 'red',
+            borderTopLeftRadius: 2,
+            borderTopRightRadius: 2,
+        },
+        cabo: {
+            width: 6,
+            height: 3,
+            backgroundColor: 'red',
+            marginBottom: 1,
+            marginTop: -2,
+            borderRadius: 1,
+        },
+        corpoLixera: {
+            width: 12,
+            height: 14,
+            backgroundColor: 'red',
+            borderBottomLeftRadius: 2,
+            borderBottomRightRadius: 2,
+        },
+        botaoEdit: {
+            width: 18,
+            height: 18,
+            backgroundColor: "blue"
+        },
+        botaoLink: {
+            width: 18,
+            height: 18,
+            backgroundColor: "blue"
+        },
+        input: {
+            borderColor: 'gray',
+            borderWidth: 1,
+            marginBottom: 10,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 5,
+            width: 200
+        },
+        botaoModalSalvar: {
+            backgroundColor: 'dodgerblue',
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: 8,
+            marginTop: 10,
+            alignItems: 'center'
+        },
+        botaoModalFechar: {
+            backgroundColor: 'gainsboro',
+            paddingVertical: 10,
+            paddingHorizontal: 10,
+            borderRadius: 8,
+            marginTop: 10,
+            alignItems: 'center',
+        },
+        botaoModalTexto: {
+            color: 'red',
+            fontWeight: 'bold',
+            fontSize: 16,
+        },
+        botaoModalDeletar: {
+            backgroundColor: 'indianred',
+            paddingVertical: 10,
+            paddingHorizontal: 10,
+            borderRadius: 8,
+            marginTop: 10,
+            alignItems: 'center',
+        },
+        inputBusca: {
+            borderColor: 'gray',
+            borderWidth: 1,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 5,
+            width: "80%",
+            alignSelf: "center",
+            marginVertical: 10,
+            justifyContent: "space-around"
+        },
+    });
+
+export default estilos;
