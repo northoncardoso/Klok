@@ -1,10 +1,10 @@
-import { StyleSheet,} from 'react-native';
+import { StyleSheet } from 'react-native';
 
     const estilos = StyleSheet.create({
         containerAbsolutoFuncionario: {
-            backgroundColor: "black",
-            width: "30%",
-            height: 135,
+            backgroundColor: "white",
+            width: "90%",
+            padding: 10,
             margin: 20,
             borderRadius: 15,
             elevation: 2 //sombra
@@ -16,9 +16,9 @@ import { StyleSheet,} from 'react-native';
             backgroundColor: "white",
             width: 150,
             height: 150,
-            margin: 20,
+            margin: 50,
             borderRadius: 15,
-            elevation: 2
+            elevation: 2,
         },
         containerCima: {
             flexGrow: 1,
@@ -120,8 +120,7 @@ import { StyleSheet,} from 'react-native';
         botaoEdit: {
             width: 18,
             height: 18,
-            backgroundColor: "blue",
-            fontWeight: "bold"
+            backgroundColor: "blue"
         },
         botaoLink: {
             width: 18,
@@ -159,22 +158,24 @@ import { StyleSheet,} from 'react-native';
             fontSize: 16,
         },
         botaoModalDeletar: {
-            backgroundColor: 'indianred ',
+            backgroundColor: 'indianred',
             paddingVertical: 10,
             paddingHorizontal: 10,
             borderRadius: 8,
             marginTop: 10,
             alignItems: 'center',
         },
-        input: {
+        inputBusca: {
+            borderColor: 'gray',
             borderWidth: 1,
-            borderColor: "gray",
-            padding: 10,
-            marginVertical: 8,
-            borderRadius: 8
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 5,
+            width: "80%",
+            alignSelf: "center",
+            marginVertical: 10,
+            justifyContent: "space-around"
         },
-       
-
     });
 
 export default estilos;

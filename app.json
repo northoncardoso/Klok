@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "myReactJobs",
+    "slug": "myreactjobs",
+    "android": {
+      "package": "com.northoncardoso.myreactjobs"
+    },
+    "ios": {
+      "bundleIdentifier": "com.northoncardoso.myreactjobs"
+    }
+  }
+}

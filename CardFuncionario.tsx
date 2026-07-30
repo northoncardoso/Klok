@@ -9,10 +9,20 @@ import {
 
 import estilos from "./estilos";
 
-function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDeletar }) {
+type CardFuncionarioProps = {
+    id: number;
+    nomeInicial: string;
+    numeroInicial: string;
+    emailInicial: string;
+    aoDeletar: () => void;
+};
+
+type TipoModal = "delete" | "editar" | "links";
+
+function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDeletar }: CardFuncionarioProps) {
 
     const [modalVisivel, setModalVisivel] = useState(false);
-    const [tipoModal, setTipoModal] = useState("");
+    const [tipoModal, setTipoModal] = useState<TipoModal | "">("");
     const [nomeFuncionario, setNomeFuncionario] = useState(nomeInicial);
     const [numero, setNumero] = useState(numeroInicial);
     const [emailFuncionario, setEmailFuncionario] = useState(emailInicial);
@@ -23,7 +33,7 @@ function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDelet
 
     const [editandoLinks, setEditandoLinks] = useState(false);
 
-    const abrirModal = (tipoDoModal) => {
+    const abrirModal = (tipoDoModal: TipoModal) => {
         setModalVisivel(true);
         setTipoModal(tipoDoModal);
     };
@@ -64,7 +74,7 @@ function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDelet
                             keyboardType="default"
                         />
                         <TextInput
-                            placeholder="Número"
+                            placeholder="NÃºmero"
                             value={numero}
                             onChangeText={setNumero}
                             style={estilos.input}
