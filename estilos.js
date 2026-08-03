@@ -1,13 +1,15 @@
 import { StyleSheet } from 'react-native';
 
     const estilos = StyleSheet.create({
+
+        // Estilos para a tela de funcionários
         containerAbsolutoFuncionario: {
             backgroundColor: "white",
             width: "90%",
             padding: 10,
             margin: 20,
             borderRadius: 15,
-            elevation: 2 //sombra
+            elevation: 2 //sombra (porém o botão recebe uma elevação referente aos demais elementos, podendo ficar acima da animação do menu)
         },
         containerCriarNovoFuncionario: {
             alignSelf: "center",
@@ -176,6 +178,81 @@ import { StyleSheet } from 'react-native';
             marginVertical: 10,
             justifyContent: "space-around"
         },
-    });
+
+        // Estilos para a tela de bater o ponto
+        estilosPontoContainer: {
+            flex: 1,
+            justifyContent: 'center',
+            alignSelf: 'center',
+            padding: 20,
+        },
+        estilosPontoDataTexto: {
+            fontSize: 18,
+            color: 'gray',
+            marginBottom: 5,
+        },
+        estilosPontoRelogioTexto: {
+            fontSize: 56,
+            fontWeight: 'bold',
+            marginBottom: 40,
+            fontVariant: ['tabular-nums'],
+        },
+        estilosPontoBotaoBaterPonto: {
+            backgroundColor: 'dodgerblue',
+            paddingVertical: 16,
+            paddingHorizontal: 40,
+            borderRadius: 10,
+        },
+        estilosPontoTextoBotao: {
+            color: 'white',
+            fontSize: 18,
+            fontWeight: 'bold',
+        },
+        // Estilos para a tela de login
+        estilosLoginContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        },
+        estilosLoginTitulo: {
+            fontSize: 28,
+            fontWeight: 'bold',
+            marginBottom: 5,
+        },
+        estilosLoginSubtitulo: {
+            fontSize: 14,
+            color: 'gray',
+            marginBottom: 30,
+        },
+        estilosLoginInput: {
+            borderColor: 'gray',
+            borderWidth: 1,
+            borderRadius: 8,
+            paddingHorizontal: 15,
+            paddingVertical: 12,
+            width: "85%",
+            marginBottom: 15,
+        },
+        estilosLoginBotaoEntrar: {
+            backgroundColor: 'dodgerblue',
+            paddingVertical: 14,
+            paddingHorizontal: 50,
+            borderRadius: 8,
+            marginTop: 10,
+            
+        },
+        estilosLoginTextoBotao: {
+            color: 'white',
+            fontSize: 16,
+            fontWeight: 'bold',
+        },
+        estilosLoginLinkAlternar: {
+        marginTop: 20,
+        color: 'dodgerblue',
+        fontSize: 14,
+        },
+    }
+);
 
 export default estilos;

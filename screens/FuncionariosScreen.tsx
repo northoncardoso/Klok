@@ -12,6 +12,7 @@ import {
     criarTabela,
     carregarFuncionarios,
     inserirFuncionario,
+    atualizarFuncionario as atualizarFuncionarioDB,
     deletarFuncionario as deletarFuncionarioDB
 } from '../database';
 
@@ -56,6 +57,12 @@ export default function FuncionariosScreen() {
 
     const deletarFuncionario = (id: any) => {
         deletarFuncionarioDB(id, () => {
+            carregarFuncionarios(setListaFuncionarios);
+        });
+    };
+
+    const editarFuncionario = (id: number, nome: string, numero: string, email: string) => {
+        atualizarFuncionarioDB(id, nome, numero, email, () => {
             carregarFuncionarios(setListaFuncionarios);
         });
     };
@@ -129,7 +136,7 @@ export default function FuncionariosScreen() {
                             onChangeText={setEmailNovo}
                             style={estilos.input}
                             keyboardType="email-address"
-                            />
+                        />
 
                         <TouchableOpacity style={estilos.botaoModalSalvar} onPress={confirmarNovoFuncionario}>
                             <Text style={{ color: "white", fontWeight: "bold", textAlign: "center" }}>Salvar</Text>
@@ -151,6 +158,9 @@ export default function FuncionariosScreen() {
                     numeroInicial={numero}
                     emailInicial={email}
                     aoDeletar={() => deletarFuncionario(id)}
+                    aoEditar={(novoNome, novoNumero, novoEmail) =>
+                        editarFuncionario(id, novoNome, novoNumero, novoEmail)
+                    }
                 />
             ))}
 

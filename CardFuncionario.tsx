@@ -15,11 +15,12 @@ type CardFuncionarioProps = {
     numeroInicial: string;
     emailInicial: string;
     aoDeletar: () => void;
+    aoEditar: (nome: string, numero: string, email: string) => void;
 };
 
 type TipoModal = "delete" | "editar" | "links";
 
-function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDeletar }: CardFuncionarioProps) {
+function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDeletar, aoEditar }: CardFuncionarioProps) {
 
     const [modalVisivel, setModalVisivel] = useState(false);
     const [tipoModal, setTipoModal] = useState<TipoModal | "">("");
@@ -46,6 +47,15 @@ function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDelet
 
     const deletarFuncionario = () => {
         aoDeletar();
+        fecharModal();
+    };
+
+    const salvarEdicao = () => {
+        const nome = nomeFuncionario.trim() || nomeInicial;
+        const numeroFinal = numero.trim() || numeroInicial;
+        const email = emailFuncionario.trim() || emailInicial;
+
+        aoEditar(nome, numeroFinal, email);
         fecharModal();
     };
 
@@ -87,7 +97,7 @@ function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDelet
                             style={estilos.input}
                             keyboardType="email-address"
                         />
-                        <TouchableOpacity style={estilos.botaoModalSalvar} onPress={fecharModal}>
+                        <TouchableOpacity style={estilos.botaoModalSalvar} onPress={salvarEdicao}>
                             <Text>Salvar</Text>
                         </TouchableOpacity>
                     </View>
