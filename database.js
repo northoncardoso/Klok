@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
 
 const db = SQLite.openDatabaseSync('funcionarios.db');
 
@@ -11,6 +12,51 @@ export function criarTabela() {
             email TEXT
         );
     `);
+}
+
+export function criarTabelaUsuarios() {
+    db.execSync(`
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT UNIQUE,
+            senhaHash TEXT
+        );
+    `);
+}
+
+async function gerarHash(senha) {
+    return await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        senha
+    );
+}
+
+export async function cadastrarUsuario(usuario, senha, callback) {
+    try {
+        const senhaHash = await gerarHash(senha);
+        db.runSync(
+            "INSERT INTO usuarios (usuario, senhaHash) VALUES (?, ?)",
+            [usuario, senhaHash]
+        );
+        callback({ sucesso: true });
+    } catch (erro) {
+        // erro.message geralmente indica violação do UNIQUE (usuário já existe)
+        callback({ sucesso: false, erro: "Usuário já existe ou dados inválidos" });
+    }
+}
+
+export async function validarUsuario(usuario, senha, callback) {
+    const senhaHash = await gerarHash(senha);
+    const resultado = db.getAllSync(
+        "SELECT * FROM usuarios WHERE usuario = ? AND senhaHash = ?",
+        [usuario, senhaHash]
+    );
+
+    if (resultado.length > 0) {
+        callback({ sucesso: true });
+    } else {
+        callback({ sucesso: false, erro: "Usuário ou senha incorretos" });
+    }
 }
 
 export function carregarFuncionarios(setLista) {
@@ -30,6 +76,14 @@ export function inserirFuncionario(nome, numero, email, callback) {
         numero,
         email
     });
+}
+
+export function atualizarFuncionario(id, nome, numero, email, callback) {
+    db.runSync(
+        "UPDATE funcionarios SET nome = ?, numero = ?, email = ? WHERE id = ?",
+        [nome, numero, email, id]
+    );
+    callback();
 }
 
 export function deletarFuncionario(id, callback) {

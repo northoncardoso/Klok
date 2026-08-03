@@ -1,42 +1,99 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import estilos from '../estilos';
 
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import {
+    criarTabelaUsuarios,
+    cadastrarUsuario,
+    validarUsuario
+} from '../database';
 
-export default function HomeScreen() {
+type HomeScreenProps = {
+    aoEntrar: () => void;
+};
+
+export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
+
+    const [usuario, setUsuario] = useState("");
+    const [senha, setSenha] = useState("");
+    const [modoCadastro, setModoCadastro] = useState(false);
+
+    useEffect(() => {
+        criarTabelaUsuarios();
+    }, []);
+
+    const entrar = () => {
+        if (!usuario.trim() || !senha.trim()) {
+            Alert.alert("Atenção", "Preencha usuário e senha.");
+            return;
+        }
+
+        validarUsuario(usuario.trim(), senha, (resultado:any) => {
+            if (resultado.sucesso) {
+                aoEntrar();
+            } else {
+                Alert.alert("Erro", resultado.erro);
+            }
+        });
+    };
+
+    const cadastrar = () => {
+        if (!usuario.trim() || !senha.trim()) {
+            Alert.alert("Atenção", "Preencha usuário e senha.");
+            return;
+        }
+
+        cadastrarUsuario(usuario.trim(), senha, (resultado:any) => {
+            if (resultado.sucesso) {
+                Alert.alert("Sucesso", "Usuário cadastrado! Agora faça login.");
+                setModoCadastro(false);
+                setSenha("");
+            } else {
+                Alert.alert("Erro", resultado.erro);
+            }
+        });
+    };
+
     return (
-        <View style={estilosHome.container}>
-            <Text style={estilosHome.titulo}>MyReactJobs</Text>
-            <Text style={estilosHome.subtitulo}>
-                Sistema de gerenciamento de funcionários
+        <View style={estilos.estilosLoginContainer}>
+            <Text style={estilos.estilosLoginTitulo}>MyReactJobs</Text>
+            <Text style={estilos.estilosLoginSubtitulo}>
+                {modoCadastro ? "Crie sua conta" : "Faça login para continuar"}
             </Text>
-            <Text style={estilosHome.texto}>
-                Use o menu no canto superior esquerdo para navegar entre as telas.
-            </Text>
+
+            <TextInput
+                placeholder="Usuário"
+                value={usuario}
+                onChangeText={setUsuario}
+                style={estilos.estilosLoginInput}
+                autoCapitalize="none"
+            />
+
+            <TextInput
+                placeholder="Senha"
+                value={senha}
+                onChangeText={setSenha}
+                style={estilos.estilosLoginInput}
+                secureTextEntry
+            />
+
+            {modoCadastro ? (
+                <TouchableOpacity style={estilos.estilosLoginBotaoEntrar} onPress={cadastrar}>
+                    <Text style={estilos.estilosPontoTextoBotao}>Cadastrar</Text>
+                </TouchableOpacity>
+            ) : (
+                <TouchableOpacity style={estilos.estilosLoginBotaoEntrar} onPress={entrar}>
+                    <Text style={estilos.estilosPontoTextoBotao}>Entrar</Text>
+                </TouchableOpacity>
+            )}
+
+            <TouchableOpacity onPress={() => setModoCadastro(!modoCadastro)}>
+                <Text style={estilos.estilosLoginLinkAlternar}>
+                    {modoCadastro
+                        ? "Já tem conta? Fazer login"
+                        : "Não tem conta? Cadastre-se"}
+                </Text>
+            </TouchableOpacity>
         </View>
     );
 }
-
-const estilosHome = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    titulo: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        marginBottom: 10,
-    },
-    subtitulo: {
-        fontSize: 16,
-        color: 'gray',
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    texto: {
-        fontSize: 14,
-        color: 'gray',
-        textAlign: 'center',
-    },
-});
