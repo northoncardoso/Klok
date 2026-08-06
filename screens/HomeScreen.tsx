@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
 import estilos from '../estilos';
 
 import {
     criarTabelaUsuarios,
+    criarUsuarioMestrePadrao,
     cadastrarUsuario,
     validarUsuario
 } from '../database';
 
 type HomeScreenProps = {
-    aoEntrar: () => void;
+    aoEntrar: (tipo: string) => void;
+};
+
+type ResultadoLogin = {
+    sucesso: boolean;
+    erro?: string;
+    tipo?: string;
 };
 
 export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
@@ -20,6 +27,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
 
     useEffect(() => {
         criarTabelaUsuarios();
+        criarUsuarioMestrePadrao();
     }, []);
 
     const entrar = () => {
@@ -28,9 +36,9 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             return;
         }
 
-        validarUsuario(usuario.trim(), senha, (resultado:any) => {
+        validarUsuario(usuario.trim(), senha, (resultado: ResultadoLogin) => {
             if (resultado.sucesso) {
-                aoEntrar();
+                aoEntrar(resultado.tipo ?? "funcionario");
             } else {
                 Alert.alert("Erro", resultado.erro);
             }
@@ -43,7 +51,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             return;
         }
 
-        cadastrarUsuario(usuario.trim(), senha, (resultado:any) => {
+        cadastrarUsuario(usuario.trim(), senha, (resultado: ResultadoLogin) => {
             if (resultado.sucesso) {
                 Alert.alert("Sucesso", "Usuário cadastrado! Agora faça login.");
                 setModoCadastro(false);

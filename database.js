@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
 
-const db = SQLite.openDatabaseSync('funcionarios.db');
+const db = SQLite.openDatabaseSync('funcionarios2.db');
 
 export function criarTabela() {
     db.execSync(`
@@ -19,7 +19,10 @@ export function criarTabelaUsuarios() {
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             usuario TEXT UNIQUE,
-            senhaHash TEXT
+            senhaHash TEXT,
+            tipo TEXT DEFAULT 'funcionario',
+            funcionarioId INTEGER,
+            FOREIGN KEY (funcionarioId) REFERENCES funcionarios(id)
         );
     `);
 }
@@ -30,22 +33,52 @@ async function gerarHash(senha) {
         senha
     );
 }
+export async function criarUsuarioMestrePadrao() {
+    const mestreExistente = db.getAllSync(
+        "SELECT id FROM usuarios WHERE usuario = ?",
+        ["mestre"]
+    );
+
+    if (mestreExistente.length === 0) {
+        const senhaHash = await gerarHash("1234");
+        db.runSync(
+            "INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId) VALUES (?, ?, ?, ?)",
+            ["mestre", senhaHash, "mestre", null]
+        );
+    }
+}
 
 export async function cadastrarUsuario(usuario, senha, callback) {
     try {
+        criarTabela();
+        const funcionarioInserido = db.runSync(
+            "INSERT INTO funcionarios (nome, numero, email) VALUES (?, ?, ?)",
+            [usuario, "", ""]
+        );
         const senhaHash = await gerarHash(senha);
         db.runSync(
-            "INSERT INTO usuarios (usuario, senhaHash) VALUES (?, ?)",
-            [usuario, senhaHash]
+            "INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId) VALUES (?, ?, ?, ?)",
+            [usuario, senhaHash, "funcionario", funcionarioInserido.lastInsertRowId]
         );
-        callback({ sucesso: true });
+        callback({ sucesso: true, tipo: "funcionario" });
     } catch (erro) {
-        // erro.message geralmente indica violação do UNIQUE (usuário já existe)
         callback({ sucesso: false, erro: "Usuário já existe ou dados inválidos" });
     }
 }
 
 export async function validarUsuario(usuario, senha, callback) {
+    // 1ª etapa: o usuário existe?
+    const usuarioEncontrado = db.getAllSync(
+        "SELECT * FROM usuarios WHERE usuario = ?",
+        [usuario]
+    );
+
+    if (usuarioEncontrado.length === 0) {
+        callback({ sucesso: false, erro: "Usuário não cadastrado" });
+        return;
+    }
+
+    // 2ª etapa: a senha bate?
     const senhaHash = await gerarHash(senha);
     const resultado = db.getAllSync(
         "SELECT * FROM usuarios WHERE usuario = ? AND senhaHash = ?",
@@ -53,9 +86,9 @@ export async function validarUsuario(usuario, senha, callback) {
     );
 
     if (resultado.length > 0) {
-        callback({ sucesso: true });
+        callback({ sucesso: true, tipo: resultado[0].tipo });
     } else {
-        callback({ sucesso: false, erro: "Usuário ou senha incorretos" });
+        callback({ sucesso: false, erro: "Senha incorreta" });
     }
 }
 

@@ -3,11 +3,12 @@ import {
     View,
     Text,
     TouchableOpacity,
-    StyleSheet,
+    Modal,
     Animated,
     Dimensions
 } from 'react-native';
 
+import estilos from './estilos';
 import HomeScreen from './screens/HomeScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
 import PontoScreen from './screens/PontoScreen';
@@ -19,9 +20,12 @@ const LARGURA_MENU = Dimensions.get('window').width * 0.7;
 export default function App() {
     const [telaAtual, setTelaAtual] = useState<Tela>("Home");
     const [menuVisivel, setMenuVisivel] = useState(false);
+    const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
 
     const posicaoMenu = useRef(new Animated.Value(-LARGURA_MENU)).current;
     const opacidadeOverlay = useRef(new Animated.Value(0)).current;
+
+    const [modalSairVisivel, setModalSairVisivel] = useState(false);
 
     const abrirMenu = () => {
         setMenuVisivel(true);
@@ -39,6 +43,12 @@ export default function App() {
         ]).start();
     };
 
+    const confirmarSaida = () => {
+        setModalSairVisivel(false);
+        setTipoUsuario(null);
+        setTelaAtual("Home");
+        fecharMenu();
+    };
     const fecharMenu = () => {
         Animated.parallel([
             Animated.timing(posicaoMenu, {
@@ -62,9 +72,16 @@ export default function App() {
     const renderizarTela = () => {
         switch (telaAtual) {
             case "Home":
-                return <HomeScreen aoEntrar={() => {}} />;
+                return (
+                    <HomeScreen
+                        aoEntrar={(tipo) => {
+                            setTipoUsuario(tipo);
+                            setTelaAtual("Bater o ponto");
+                        }}
+                    />
+                );
             case "Funcionarios":
-                return <FuncionariosScreen />;
+                return tipoUsuario ==="mestre" ?<FuncionariosScreen /> : null;
             case "Bater o ponto":
                 return <PontoScreen />;
             default:
@@ -76,11 +93,11 @@ export default function App() {
         <View style={{ flex: 1 }}>
 
             {/* Barra superior */}
-            <View style={estilosMenu.barraSuperior}>
+            <View style={estilos.estilosMenuBarraSuperior}>
                 <TouchableOpacity onPress={abrirMenu} hitSlop={{ top: 10, bottom: 30, left: 10, right: 10 }}>
-                    <Text style={estilosMenu.iconeMenu}>☰</Text>
+                    <Text style={estilos.estilosMenuIconeMenu}>☰</Text>
                 </TouchableOpacity>
-                <Text style={estilosMenu.tituloBarra}>Menu</Text>
+                <Text style={estilos.estilosMenuTituloBarra}>Menu</Text>
             </View>
 
             {/* Conteúdo da tela atual */}
@@ -90,10 +107,10 @@ export default function App() {
 
             {/* Menu lateral animado */}
             {menuVisivel && (
-                <View style={estilosMenu.overlayContainer}>
+                <View style={estilos.estilosMenuOverlayContainer}>
                     <Animated.View
                         style={[
-                            estilosMenu.overlayFundo,
+                            estilos.estilosMenuOverlayFundo,
                             { opacity: opacidadeOverlay }
                         ]}
                     >
@@ -106,92 +123,64 @@ export default function App() {
 
                     <Animated.View
                         style={[
-                            estilosMenu.menuLateral,
+                            estilos.estilosMenuLateral,
                             { transform: [{ translateX: posicaoMenu }] }
                         ]}
                     >
-                        <Text style={estilosMenu.tituloMenu}>Menu</Text>
+                        <Text style={estilos.estilosMenuTituloMenu}>Menu</Text>
 
                         <TouchableOpacity
-                            style={estilosMenu.itemMenu}
+                            style={estilos.estilosMenuItemMenu}
                             onPress={() => irPara("Home")}
                         >
-                            <Text style={estilosMenu.textoItemMenu}>Início</Text>
+                            <Text style={estilos.estilosMenuTextoItemMenu}>Início</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={estilosMenu.itemMenu}
-                            onPress={() => irPara("Funcionarios")}
-                        >
-                            <Text style={estilosMenu.textoItemMenu}>Funcionários</Text>
-                        </TouchableOpacity>
+                        {tipoUsuario === "mestre" && (
+                            <TouchableOpacity
+                                style={estilos.estilosMenuItemMenu}
+                                onPress={() => irPara("Funcionarios")}
+                            >
+                                <Text style={estilos.estilosMenuTextoItemMenu}>Funcionários</Text>
+                            </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity
-                            style={estilosMenu.itemMenu}
+                            style={estilos.estilosMenuItemMenu}
                             onPress={() => irPara("Bater o ponto")}
                         >
-                            <Text style={estilosMenu.textoItemMenu}>Bater o ponto</Text>
+                            <Text style={estilos.estilosMenuTextoItemMenu}>Bater o ponto</Text>
                         </TouchableOpacity>
+                        {tipoUsuario !== null && (
+                            <TouchableOpacity
+                                style={estilos.estilosMenuItemMenu}
+                                onPress={() => setModalSairVisivel(true)}
+                            >
+                                <Text style={estilos.estilosMenuTextoItemMenu}>Sair</Text>
+                            </TouchableOpacity>
+                        )}
                     </Animated.View>
                 </View>
             )}
+                                    <Modal visible={modalSairVisivel} transparent={true} animationType="fade">
+                        <View style={estilos.estilosModalSairOverlay}>
+                            <View style={estilos.estilosModalSairCaixa}>
+                                <Text style={estilos.estilosModalSairTextoPergunta}>
+                                    Tem certeza que deseja sair?
+                                </Text>
+
+                                <TouchableOpacity style={estilos.botaoModalDeletar} onPress={confirmarSaida}>
+                                    <Text style={estilos.estilosModalSairTextoBotaoSair}>
+                                        Sim, sair
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={estilos.botaoModalFechar} onPress={() => setModalSairVisivel(false)}>
+                                    <Text style={estilos.estilosModalSairTextoBotaoCancelar}>Cancelar</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </Modal>
         </View>
     );
 }
-
-const estilosMenu = StyleSheet.create({
-    barraSuperior: {
-        height: 60,
-        backgroundColor: 'dodgerblue',
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingTop: 10,
-    },
-    iconeMenu: {
-        fontSize: 26,
-        color: 'white',
-        marginRight: 15,
-    },
-    tituloBarra: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    overlayContainer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        flexDirection: 'row',
-    },
-    overlayFundo: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-    },
-    menuLateral: {
-        width: LARGURA_MENU,
-        backgroundColor: 'white',
-        paddingTop: 60,
-        paddingHorizontal: 20,
-        height: '100%',
-    },
-    tituloMenu: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 20,
-    },
-    itemMenu: {
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    textoItemMenu: {
-        fontSize: 16,
-    },
-});
