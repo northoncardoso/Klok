@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native';
 
     const estilos = StyleSheet.create({
 
-        // Estilos para a tela de funcionários
+        // Estilos tela de funcionários
         containerAbsolutoFuncionario: {
             backgroundColor: "white",
             width: "90%",
@@ -179,7 +179,7 @@ import { StyleSheet } from 'react-native';
             justifyContent: "space-around"
         },
 
-        // Estilos para a tela de bater o ponto
+        // Estilos tela bater o ponto
         estilosPontoContainer: {
             flex: 1,
             justifyContent: 'center',
@@ -208,7 +208,7 @@ import { StyleSheet } from 'react-native';
             fontSize: 18,
             fontWeight: 'bold',
         },
-        // Estilos para a tela de login
+        // Estilos tela de login
         estilosLoginContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -239,8 +239,7 @@ import { StyleSheet } from 'react-native';
             paddingVertical: 14,
             paddingHorizontal: 50,
             borderRadius: 8,
-            marginTop: 10,
-            
+            marginTop: 10
         },
         estilosLoginTextoBotao: {
             color: 'white',
@@ -252,7 +251,87 @@ import { StyleSheet } from 'react-native';
         color: 'dodgerblue',
         fontSize: 14,
         },
+        // Estilos do menu lateral (App.tsx)
+        estilosMenuBarraSuperior: {
+            height: 60,
+            backgroundColor: 'dodgerblue',
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 15,
+            paddingTop: 10,
+        },
+        estilosMenuIconeMenu: {
+            fontSize: 26,
+            color: 'white',
+            marginRight: 15,
+        },
+        estilosMenuTituloBarra: {
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: 'white',
+        },
+        estilosMenuOverlayContainer: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            flexDirection: 'row',
+        },
+        estilosMenuOverlayFundo: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+        },
+        estilosMenuLateral: {
+            width: "70%",
+            backgroundColor: 'white',
+            paddingTop: 60,
+            paddingHorizontal: 20,
+            height: '100%',
+        },
+        estilosMenuTituloMenu: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            marginBottom: 20,
+        },
+        estilosMenuItemMenu: {
+            paddingVertical: 15,
+            borderBottomWidth: 1,
+            borderBottomColor: '#eee',
+        },
+        estilosMenuTextoItemMenu: {
+            fontSize: 16,
+        },
+        // Estilos do modal de sair (App.tsx)
+        estilosModalSairOverlay: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        estilosModalSairCaixa: {
+            backgroundColor: 'white',
+            padding: 20,
+            borderRadius: 10,
+            width: "90%",
+        },
+        estilosModalSairTextoPergunta: {
+            fontSize: 16,
+            marginBottom: 15,
+            textAlign: 'center',
+        },
+        estilosModalSairTextoBotaoSair: {
+            color: 'white',
+            fontWeight: 'bold',
+            textAlign: 'center',
+        },
+        estilosModalSairTextoBotaoCancelar: {
+            textAlign: 'center',
+        },
     }
 );
 
-export default estilos;
+    export default estilos;
