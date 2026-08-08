@@ -145,12 +145,14 @@ export default function App() {
                             </TouchableOpacity>
                         )}
 
-                        <TouchableOpacity
-                            style={estilos.estilosMenuItemMenu}
-                            onPress={() => irPara("Bater o ponto")}
-                        >
-                            <Text style={estilos.estilosMenuTextoItemMenu}>Bater o ponto</Text>
-                        </TouchableOpacity>
+                        {tipoUsuario !== null && (
+                            <TouchableOpacity
+                                style={estilos.estilosMenuItemMenu}
+                                onPress={() => irPara("Bater o ponto")}
+                            >
+                                <Text style={estilos.estilosMenuTextoItemMenu}>Bater o ponto</Text>
+                            </TouchableOpacity>
+                        )}
                         {tipoUsuario !== null && (
                             <TouchableOpacity
                                 style={estilos.estilosMenuItemMenu}
@@ -162,25 +164,25 @@ export default function App() {
                     </Animated.View>
                 </View>
             )}
-                                    <Modal visible={modalSairVisivel} transparent={true} animationType="fade">
-                        <View style={estilos.estilosModalSairOverlay}>
-                            <View style={estilos.estilosModalSairCaixa}>
-                                <Text style={estilos.estilosModalSairTextoPergunta}>
-                                    Tem certeza que deseja sair?
-                                </Text>
+            <Modal visible={modalSairVisivel} transparent={true} animationType="fade">
+                <View style={estilos.estilosModalSairOverlay}>
+                    <View style={estilos.estilosModalSairCaixa}>
+                        <Text style={estilos.estilosModalSairTextoPergunta}>
+                            Tem certeza que deseja sair?
+                        </Text>
 
-                                <TouchableOpacity style={estilos.botaoModalDeletar} onPress={confirmarSaida}>
-                                    <Text style={estilos.estilosModalSairTextoBotaoSair}>
-                                        Sim, sair
-                                    </Text>
-                                </TouchableOpacity>
+                        <TouchableOpacity style={estilos.botaoModalDeletar} onPress={confirmarSaida}>
+                            <Text style={estilos.estilosModalSairTextoBotaoSair}>
+                                Sim, sair
+                            </Text>
+                        </TouchableOpacity>
 
-                                <TouchableOpacity style={estilos.botaoModalFechar} onPress={() => setModalSairVisivel(false)}>
-                                    <Text style={estilos.estilosModalSairTextoBotaoCancelar}>Cancelar</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </Modal>
+                        <TouchableOpacity style={estilos.botaoModalFechar} onPress={() => setModalSairVisivel(false)}>
+                            <Text style={estilos.estilosModalSairTextoBotaoCancelar}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
