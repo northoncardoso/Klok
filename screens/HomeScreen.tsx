@@ -64,7 +64,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
 
     return (
         <View style={estilos.estilosLoginContainer}>
-            <Text style={estilos.estilosLoginTitulo}>MyReactJobs</Text>
+            <Text style={estilos.estilosLoginTitulo}>Klok</Text>
             <Text style={estilos.estilosLoginSubtitulo}>
                 {modoCadastro ? "Crie sua conta" : "Faça login para continuar"}
             </Text>
