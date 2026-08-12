@@ -22,9 +22,36 @@ export function criarTabelaUsuarios() {
             senhaHash TEXT,
             tipo TEXT DEFAULT 'funcionario',
             funcionarioId INTEGER,
+            googleId TEXT UNIQUE,
             FOREIGN KEY (funcionarioId) REFERENCES funcionarios(id)
         );
     `);
+}
+export function buscarOuCriarUsuarioGoogle(googleId, nome, callback) {
+    const usuarioExistente = db.getAllSync(
+        "SELECT * FROM usuarios WHERE googleId = ?",
+        [googleId]
+    );
+
+    if (usuarioExistente.length > 0) {
+        const usuario = usuarioExistente[0];
+        callback({ sucesso: true, tipo: usuario.tipo, id: usuario.id });
+        return;
+    }
+
+    // Usuário novo via Google — cria como funcionário, sem senha
+    criarTabela();
+    const funcionarioInserido = db.runSync(
+        "INSERT INTO funcionarios (nome, numero, email) VALUES (?, ?, ?)",
+        [nome, "", ""]
+    );
+
+    const resultado = db.runSync(
+        "INSERT INTO usuarios (usuario, tipo, funcionarioId, googleId) VALUES (?, ?, ?, ?)",
+        [nome, "funcionario", funcionarioInserido.lastInsertRowId, googleId]
+    );
+
+    callback({ sucesso: true, tipo: "funcionario", id: resultado.lastInsertRowId });
 }
 
 async function gerarHash(senha) {

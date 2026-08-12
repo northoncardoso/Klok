@@ -284,7 +284,7 @@ import { StyleSheet } from 'react-native';
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.4)',
+            backgroundColor: 'rgb(255, 250, 250)',
         },
         estilosMenuLateral: {
             width: "70%",
@@ -330,6 +330,13 @@ import { StyleSheet } from 'react-native';
         },
         estilosModalSairTextoBotaoCancelar: {
             textAlign: 'center',
+        },
+        estilosLoginBotaoGoogle: {
+        backgroundColor: '#DB4437',
+        paddingVertical: 14,
+        paddingHorizontal: 50,
+        borderRadius: 8,
+        marginTop: 10,
         },
     }
 );
