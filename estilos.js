@@ -284,7 +284,7 @@ import { StyleSheet } from 'react-native';
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgb(255, 250, 250)',
+            backgroundColor: "white",
         },
         estilosMenuLateral: {
             width: "70%",
@@ -301,7 +301,7 @@ import { StyleSheet } from 'react-native';
         estilosMenuItemMenu: {
             paddingVertical: 15,
             borderBottomWidth: 1,
-            borderBottomColor: '#eee',
+            borderBottomColor: 'white',
         },
         estilosMenuTextoItemMenu: {
             fontSize: 16,
