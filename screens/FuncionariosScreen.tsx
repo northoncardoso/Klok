@@ -1,20 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import {
-    TouchableOpacity,
-    View,
-    Text,
-    Modal,
-    TextInput,
-    ScrollView
-} from 'react-native';
+import {TouchableOpacity,View,Text,Modal,TextInput,ScrollView} from 'react-native';
 
-import {
-    criarTabela,
-    carregarFuncionarios,
-    inserirFuncionario,
-    atualizarFuncionario as atualizarFuncionarioDB,
-    deletarFuncionario as deletarFuncionarioDB
-} from '../database';
+import {criarTabela,carregarFuncionarios,inserirFuncionario,atualizarFuncionario as atualizarFuncionarioDB,deletarFuncionario as deletarFuncionarioDB} from '../database';
 
 import estilos from "../estilos";
 import CardFuncionario from "../CardFuncionario";
@@ -95,6 +82,7 @@ export default function FuncionariosScreen() {
 
             <TextInput
                 placeholder="Buscar funcionário..."
+                placeholderTextColor="gray"
                 value={textoBusca}
                 onChangeText={setTextoBusca}
                 style={estilos.inputBusca}

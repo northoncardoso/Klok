@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import * as AuthSession from 'expo-auth-session';
 import estilos from '../estilos';
+import { discovery, clientId, redirectUri } from '../keycloak';
 
 import {
     criarTabelaUsuarios,
     criarUsuarioMestrePadrao,
     cadastrarUsuario,
     validarUsuario,
-    buscarOuCriarUsuarioGoogle
+    buscarOuCriarUsuarioKeycloak
 } from '../database';
 
 type HomeScreenProps = {
@@ -22,10 +23,6 @@ type ResultadoLogin = {
     id?: number;
 };
 
-GoogleSignin.configure({
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB, // Client ID tipo "Web", não o Android
-});
-
 export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
 
     const [usuario, setUsuario] = useState("");
@@ -37,33 +34,67 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         criarUsuarioMestrePadrao();
     }, []);
 
-    const entrarComGoogle = async () => {
+    const [request, response, promptAsync] = AuthSession.useAuthRequest(
+        {
+            clientId,
+            redirectUri,
+            scopes: ['openid', 'profile', 'email'],
+            usePKCE: true, // obrigatório: o client no Keycloak é público (sem client secret)
+        },
+        discovery
+    );
+
+    useEffect(() => {
+        if (response?.type === 'success') {
+            const { code } = response.params;
+            trocarCodePorToken(code);
+        } else if (response?.type === 'error') {
+            Alert.alert("Erro", "Falha ao autenticar com Keycloak.");
+        }
+    }, [response]);
+
+    const trocarCodePorToken = async (code: string) => {
         try {
-            await GoogleSignin.hasPlayServices();
-            const resposta = await GoogleSignin.signIn();
+            const tokenResult = await AuthSession.exchangeCodeAsync(
+                {
+                    clientId,
+                    code,
+                    redirectUri,
+                    extraParams: {
+                        code_verifier: request?.codeVerifier ?? '',
+                    },
+                },
+                discovery
+            );
 
-            const googleId = resposta.data?.user.id;
-            const nome = resposta.data?.user.name ?? "Usuário Google";
+            const userInfoResponse = await fetch(discovery.userInfoEndpoint, {
+                headers: { Authorization: `Bearer ${tokenResult.accessToken}` },
+            });
+            const userInfo = await userInfoResponse.json();
 
-            if (!googleId) {
-                Alert.alert("Erro", "Não foi possível obter os dados do Google.");
+            const keycloakId = userInfo.sub;
+            const nome = userInfo.name ?? userInfo.preferred_username ?? "Usuário Keycloak";
+
+            if (!keycloakId) {
+                Alert.alert("Erro", "Não foi possível obter os dados do Keycloak.");
                 return;
             }
 
-            buscarOuCriarUsuarioGoogle(googleId, nome, (resultado: ResultadoLogin) => {
+            buscarOuCriarUsuarioKeycloak(keycloakId, nome, (resultado: ResultadoLogin) => {
                 if (resultado.sucesso) {
                     aoEntrar(resultado.tipo ?? "funcionario", resultado.id!);
                 } else {
-                    Alert.alert("Erro", "Não foi possível entrar com Google.");
+                    Alert.alert("Erro", "Não foi possível entrar com Keycloak.");
                 }
             });
         } catch (erro: any) {
-            if (erro.code === statusCodes.SIGN_IN_CANCELLED) {
-                // usuário cancelou, não faz nada
-            } else {
-                Alert.alert("Erro", "Falha ao entrar com Google.");
-            }
+            console.log("Erro ao trocar code por token:", erro.message ?? erro);
+            Alert.alert("Erro", "Falha na autenticação.");
         }
+    };
+
+    const entrarComKeycloak = () => {
+        promptAsync();
     };
 
     const entrar = () => {
@@ -111,6 +142,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
                 onChangeText={setUsuario}
                 style={estilos.estilosLoginInput}
                 autoCapitalize="none"
+                placeholderTextColor = "gray"
             />
 
             <TextInput
@@ -119,6 +151,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
                 onChangeText={setSenha}
                 style={estilos.estilosLoginInput}
                 secureTextEntry
+                placeholderTextColor = "gray"
             />
 
             {modoCadastro ? (
@@ -131,8 +164,8 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
                 </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={estilos.estilosLoginBotaoGoogle} onPress={entrarComGoogle}>
-                <Text style={estilos.estilosPontoTextoBotao}>Entrar com Google</Text>
+            <TouchableOpacity style={estilos.estilosLoginBotaoGoogle} onPress={entrarComKeycloak} disabled={!request}>
+                <Text style={estilos.estilosPontoTextoBotao}>Entrar com Keycloak</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setModoCadastro(!modoCadastro)}>

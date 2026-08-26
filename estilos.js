@@ -233,6 +233,7 @@ import { StyleSheet } from 'react-native';
             paddingVertical: 12,
             width: "85%",
             marginBottom: 15,
+            color: 'black'
         },
         estilosLoginBotaoEntrar: {
             backgroundColor: 'dodgerblue',
