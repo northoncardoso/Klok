@@ -90,7 +90,7 @@ export default function App() {
     };
 
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 , backgroundColor: '#f0f0f0'}}>
 
             {/* Barra superior */}
             <View style={estilos.estilosMenuBarraSuperior}>
@@ -101,7 +101,7 @@ export default function App() {
             </View>
 
             {/* Conteúdo da tela atual */}
-            <View style={{ flex: 1}}>
+            <View style={{ flex: 1 , backgroundColor: '#f0f0f0'}}>
                 {renderizarTela()}
             </View>
 

@@ -27,10 +27,12 @@ export function criarTabelaUsuarios() {
         );
     `);
 }
-export function buscarOuCriarUsuarioGoogle(googleId, nome, callback) {
+export function buscarOuCriarUsuarioKeycloak(keycloakId, nome, callback) {
+    // A coluna "googleId" é reaproveitada para armazenar o "sub" (id único)
+    // retornado pelo Keycloak, evitando alterar o esquema do banco já existente.
     const usuarioExistente = db.getAllSync(
         "SELECT * FROM usuarios WHERE googleId = ?",
-        [googleId]
+        [keycloakId]
     );
 
     if (usuarioExistente.length > 0) {
@@ -39,7 +41,7 @@ export function buscarOuCriarUsuarioGoogle(googleId, nome, callback) {
         return;
     }
 
-    // Usuário novo via Google — cria como funcionário, sem senha
+    // Usuário novo via Keycloak — cria como funcionário, sem senha
     criarTabela();
     const funcionarioInserido = db.runSync(
         "INSERT INTO funcionarios (nome, numero, email) VALUES (?, ?, ?)",
@@ -48,7 +50,7 @@ export function buscarOuCriarUsuarioGoogle(googleId, nome, callback) {
 
     const resultado = db.runSync(
         "INSERT INTO usuarios (usuario, tipo, funcionarioId, googleId) VALUES (?, ?, ?, ?)",
-        [nome, "funcionario", funcionarioInserido.lastInsertRowId, googleId]
+        [nome, "funcionario", funcionarioInserido.lastInsertRowId, keycloakId]
     );
 
     callback({ sucesso: true, tipo: "funcionario", id: resultado.lastInsertRowId });

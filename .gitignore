@@ -1,2 +1,38 @@
-.env
+# Dependências
+node_modules/
+
+# Expo
 .expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Nativo (managed workflow — geradas pelo prebuild, não devem ser versionadas)
+android/
+ios/
+
+# Variáveis de ambiente (contém URLs, client IDs — segredos de config)
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+
+# Build outputs / EAS
+*.ipa
+*.apk
+*.aab
