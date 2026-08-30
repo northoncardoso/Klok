@@ -4,15 +4,19 @@
     "slug": "myreactjobs",
     "scheme": "myreactjobs",
     "android": {
-      "package": "com.northoncardoso.myReactJobs" 
+      "package": "com.northoncardoso.myReactJobs"
     },
     "ios": {
       "bundleIdentifier": "com.northoncardoso.myReactJobs"
     },
     "extra": {
       "eas": {
-        "projectId": "9217e781-60d1-4d07-bcb8-7383bed209bd" 
+        "projectId": "9217e781-60d1-4d07-bcb8-7383bed209bd"
       }
-    }
+    },
+    "plugins": [
+      "@react-native-google-signin/google-signin",
+      "expo-secure-store"
+    ]
   }
 }
