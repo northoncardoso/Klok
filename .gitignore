@@ -36,3 +36,9 @@ yarn-error.*
 *.ipa
 *.apk
 *.aab
+
+# Banco de dados do backend (dados locais)
+*.db
+*.db-wal
+*.db-shm
+myREactJobs-api/.env
