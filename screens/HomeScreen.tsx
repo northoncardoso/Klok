@@ -1,140 +1,117 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
-import * as AuthSession from 'expo-auth-session';
-import estilos from '../estilos';
-import { discovery, clientId, redirectUri } from '../keycloak';
-
 import {
-    criarTabelaUsuarios,
-    criarUsuarioMestrePadrao,
-    cadastrarUsuario,
-    validarUsuario,
-    buscarOuCriarUsuarioKeycloak
-} from '../database';
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    Alert,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+} from 'react-native';
+import { GoogleSignin, statusCodes, isErrorWithCode } from '@react-native-google-signin/google-signin';
+import estilos from '../estilos';
+import { api, salvarSessao } from '../api';
 
 type HomeScreenProps = {
-    aoEntrar: (tipo: string, id: number) => void;
+    aoEntrar: (dados: { token: string; tipo: string; nome: string; id: number }) => void;
 };
 
-type ResultadoLogin = {
-    sucesso: boolean;
-    erro?: string;
-    tipo?: string;
-    id?: number;
-};
+GoogleSignin.configure({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    offlineAccess: false,
+});
 
 export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
-
-    const [usuario, setUsuario] = useState("");
-    const [senha, setSenha] = useState("");
+    const [usuario, setUsuario] = useState('');
+    const [senha, setSenha] = useState('');
+    const [nome, setNome] = useState('');
     const [modoCadastro, setModoCadastro] = useState(false);
+    const [carregando, setCarregando] = useState(false);
 
-    useEffect(() => {
-        criarTabelaUsuarios();
-        criarUsuarioMestrePadrao();
-    }, []);
-
-    const [request, response, promptAsync] = AuthSession.useAuthRequest(
-        {
-            clientId,
-            redirectUri,
-            scopes: ['openid', 'profile', 'email'],
-            usePKCE: true, // obrigatório: o client no Keycloak é público (sem client secret)
-        },
-        discovery
-    );
-
-    useEffect(() => {
-        if (response?.type === 'success') {
-            const { code } = response.params;
-            trocarCodePorToken(code);
-        } else if (response?.type === 'error') {
-            Alert.alert("Erro", "Falha ao autenticar com Keycloak.");
+    const entrar = async () => {
+        if (!usuario.trim() || !senha.trim()) {
+            Alert.alert('Atenção', 'Preencha usuário e senha.');
+            return;
         }
-    }, [response]);
-
-    const trocarCodePorToken = async (code: string) => {
+        setCarregando(true);
         try {
-            const tokenResult = await AuthSession.exchangeCodeAsync(
-                {
-                    clientId,
-                    code,
-                    redirectUri,
-                    extraParams: {
-                        code_verifier: request?.codeVerifier ?? '',
-                    },
-                },
-                discovery
-            );
+            const dados = await api.login(usuario.trim(), senha);
+            await salvarSessao(dados);
+            aoEntrar(dados);
+        } catch (e: any) {
+            Alert.alert('Erro', e.message);
+        } finally {
+            setCarregando(false);
+        }
+    };
 
-            const userInfoResponse = await fetch(discovery.userInfoEndpoint, {
-                headers: { Authorization: `Bearer ${tokenResult.accessToken}` },
-            });
-            const userInfo = await userInfoResponse.json();
+    const cadastrar = async () => {
+        if (!usuario.trim() || !senha.trim()) {
+            Alert.alert('Atenção', 'Preencha usuário e senha.');
+            return;
+        }
+        setCarregando(true);
+        try {
+            await api.registrar(usuario.trim(), senha, nome.trim());
+            Alert.alert('Sucesso', 'Usuário cadastrado! Agora faça login.');
+            setModoCadastro(false);
+            setSenha('');
+            setNome('');
+        } catch (e: any) {
+            Alert.alert('Erro', e.message);
+        } finally {
+            setCarregando(false);
+        }
+    };
 
-            const keycloakId = userInfo.sub;
-            const nome = userInfo.name ?? userInfo.preferred_username ?? "Usuário Keycloak";
+    const entrarComGoogle = async () => {
+        try {
+            await GoogleSignin.hasPlayServices();
+            const resposta = await GoogleSignin.signIn();
+            const idToken = resposta.data?.idToken;
 
-            if (!keycloakId) {
-                Alert.alert("Erro", "Não foi possível obter os dados do Keycloak.");
+            if (!idToken) {
+                Alert.alert('Erro', 'Não foi possível obter o token do Google.');
                 return;
             }
 
-            buscarOuCriarUsuarioKeycloak(keycloakId, nome, (resultado: ResultadoLogin) => {
-                if (resultado.sucesso) {
-                    aoEntrar(resultado.tipo ?? "funcionario", resultado.id!);
-                } else {
-                    Alert.alert("Erro", "Não foi possível entrar com Keycloak.");
-                }
-            });
-        } catch (erro: any) {
-            console.log("Erro ao trocar code por token:", erro.message ?? erro);
-            Alert.alert("Erro", "Falha na autenticação.");
-        }
-    };
-
-    const entrarComKeycloak = () => {
-        promptAsync();
-    };
-
-    const entrar = () => {
-        if (!usuario.trim() || !senha.trim()) {
-            Alert.alert("Atenção", "Preencha usuário e senha.");
-            return;
-        }
-
-        validarUsuario(usuario.trim(), senha, (resultado: ResultadoLogin) => {
-            if (resultado.sucesso) {
-                aoEntrar(resultado.tipo ?? "funcionario", resultado.id!);
+            setCarregando(true);
+            const dados = await api.loginGoogle(idToken);
+            await salvarSessao(dados);
+            aoEntrar(dados);
+        } catch (e: any) {
+            if (isErrorWithCode(e) && e.code === statusCodes.SIGN_IN_CANCELLED) {
+                // usuário cancelou
+            } else if (isErrorWithCode(e) && e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+                Alert.alert('Erro', 'Google Play Services não disponível.');
             } else {
-                Alert.alert("Erro", resultado.erro);
+                Alert.alert('Erro', 'Falha ao entrar com Google.');
             }
-        });
-    };
-
-    const cadastrar = () => {
-        if (!usuario.trim() || !senha.trim()) {
-            Alert.alert("Atenção", "Preencha usuário e senha.");
-            return;
+        } finally {
+            setCarregando(false);
         }
-
-        cadastrarUsuario(usuario.trim(), senha, (resultado: ResultadoLogin) => {
-            if (resultado.sucesso) {
-                Alert.alert("Sucesso", "Usuário cadastrado! Agora faça login.");
-                setModoCadastro(false);
-                setSenha("");
-            } else {
-                Alert.alert("Erro", resultado.erro);
-            }
-        });
     };
 
     return (
-        <View style={estilos.estilosLoginContainer}>
-            <Text style={estilos.estilosLoginTitulo}>MyReactJobs</Text>
+        <KeyboardAvoidingView
+            style={estilos.estilosLoginContainer}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+            <Text style={estilos.estilosLoginTitulo}>Klok</Text>
             <Text style={estilos.estilosLoginSubtitulo}>
-                {modoCadastro ? "Crie sua conta" : "Faça login para continuar"}
+                {modoCadastro ? 'Crie sua conta' : 'Faça login para continuar'}
             </Text>
+
+            {modoCadastro && (
+                <TextInput
+                    placeholder="Nome"
+                    value={nome}
+                    onChangeText={setNome}
+                    style={estilos.estilosLoginInput}
+                    placeholderTextColor="gray"
+                />
+            )}
 
             <TextInput
                 placeholder="Usuário"
@@ -142,7 +119,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
                 onChangeText={setUsuario}
                 style={estilos.estilosLoginInput}
                 autoCapitalize="none"
-                placeholderTextColor = "gray"
+                placeholderTextColor="gray"
             />
 
             <TextInput
@@ -151,28 +128,46 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
                 onChangeText={setSenha}
                 style={estilos.estilosLoginInput}
                 secureTextEntry
-                placeholderTextColor = "gray"
+                placeholderTextColor="gray"
             />
 
             {modoCadastro ? (
-                <TouchableOpacity style={estilos.estilosLoginBotaoEntrar} onPress={cadastrar}>
-                    <Text style={estilos.estilosPontoTextoBotao}>Cadastrar</Text>
+                <TouchableOpacity
+                    style={estilos.estilosLoginBotaoEntrar}
+                    onPress={cadastrar}
+                    disabled={carregando}
+                >
+                    <Text style={estilos.estilosPontoTextoBotao}>
+                        {carregando ? 'Cadastrando...' : 'Cadastrar'}
+                    </Text>
                 </TouchableOpacity>
             ) : (
-                <TouchableOpacity style={estilos.estilosLoginBotaoEntrar} onPress={entrar}>
-                    <Text style={estilos.estilosPontoTextoBotao}>Entrar</Text>
+                <TouchableOpacity
+                    style={estilos.estilosLoginBotaoEntrar}
+                    onPress={entrar}
+                    disabled={carregando}
+                >
+                    <Text style={estilos.estilosPontoTextoBotao}>
+                        {carregando ? 'Entrando...' : 'Entrar'}
+                    </Text>
                 </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={estilos.estilosLoginBotaoGoogle} onPress={entrarComKeycloak} disabled={!request}>
-                <Text style={estilos.estilosPontoTextoBotao}>Entrar com Keycloak</Text>
+            <TouchableOpacity
+                style={estilos.estilosLoginBotaoGoogle}
+                onPress={entrarComGoogle}
+                disabled={carregando}
+            >
+                <Text style={estilos.estilosPontoTextoBotao}>Entrar com Google</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setModoCadastro(!modoCadastro)}>
                 <Text style={estilos.estilosLoginLinkAlternar}>
-                    {modoCadastro ? "Já tem conta? Fazer login" : "Não tem conta? Cadastre-se"}
+                    {modoCadastro
+                        ? 'Já tem conta? Fazer login'
+                        : 'Não tem conta? Cadastre-se'}
                 </Text>
             </TouchableOpacity>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
