@@ -1,4 +1,4 @@
-# Klok (antigo myReactJobs)
+# Klok
 
 Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto**.
 
@@ -17,7 +17,7 @@ Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto
 App React Native (Expo)
         │  HTTPS/JSON (JWT Bearer)
         ▼
-Backend Node.js/Express (myREactJobs-api/)
+Backend Node.js/Express (klok-api/)
         │
         ▼
 SQLite (nativo node:sqlite)  →  funcionarios | usuarios | pontos
@@ -33,7 +33,7 @@ SQLite (nativo node:sqlite)  →  funcionarios | usuarios | pontos
 ### 1. Backend
 
 ```bash
-cd myREactJobs-api
+cd klok-api
 cp .env.example .env      # ajuste o JWT_SECRET se quiser
 npm install
 npm start                 # sobe na porta 3000
@@ -113,7 +113,7 @@ Raiz (app):
 - `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS`
 - `EXPO_PUBLIC_API_URL` — URL do backend
 
-`myREactJobs-api/.env`:
+`klok-api/.env`:
 - `PORT`
 - `JWT_SECRET` — segredo para assinar os tokens
 - `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB` — mesma audience usada para validar o token
