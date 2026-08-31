@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "myReactJobs",
-    "slug": "myreactjobs",
-    "scheme": "myreactjobs",
+    "name": "Klok",
+    "slug": "klok",
+    "scheme": "klok",
     "android": {
       "package": "com.northoncardoso.myReactJobs"
     },

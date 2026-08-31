@@ -1,5 +1,5 @@
 {
-  "name": "myreactjobs-api",
+  "name": "klok-api",
   "version": "2.0.0",
   "description": "Backend da Klok - gestão de funcionários com batida de ponto",
   "type": "module",
