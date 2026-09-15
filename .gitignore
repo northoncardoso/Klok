@@ -7,11 +7,11 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Nativo (managed workflow — geradas pelo prebuild, não devem ser versionadas)
+# Nativo (managed workflow, geradas pelo prebuild, nao devem ser versionadas)
 android/
 ios/
 
-# Variáveis de ambiente (contém URLs, client IDs — segredos de config)
+# Variaveis de ambiente (contem URLs, client IDs, segredos de config)
 .env
 .env.local
 .env.*.local
@@ -42,3 +42,6 @@ yarn-error.*
 *.db-wal
 *.db-shm
 klok-api/.env
+
+# Instruções pessoais de ambiente (não versionar)
+info-roda-klok.txt
