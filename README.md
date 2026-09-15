@@ -8,6 +8,9 @@ Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto
 - Todo dado fica centralizado em um **backend Node.js/Express** com SQLite (nativo do Node, sem dependência extra).
 
 > Removido o Keycloak. O único provedor de login social é o **Google OAuth2**.
+> O slug do EAS segue `myreactjobs` por ser o identificador do projeto EAS que
+> concentra as credenciais e o keystore; o nome do app e o pacote Android já são
+> **Klok** (`com.northoncardoso.klok`).
 
 ---
 
@@ -59,29 +62,43 @@ no emulador Android). Confira o `.env` da raiz.
 ## Login com Google (configuração no Google Cloud)
 
 O botão "Entrar com Google" usa o `@react-native-google-signin/google-signin`.
-Para funcionar, o **SHA-1** do certificado de assinatura precisa estar registrado
-no client **Android** do seu projeto no Google Cloud Console.
+O app é identificado pelo pacote Android `com.northoncardoso.klok`, e o Google
+valida cada build pelo SHA-1 do certificado de assinatura. Como o console só
+aceita um SHA-1 por client, cria-se um client Android por keystore.
 
-Certificado de debug (emulador/build local):
+SHA-1 de cada keystore deste projeto:
+
+| Keystore | Uso | SHA-1 |
+|----------|-----|-------|
+| EAS (build para celular) | `eas build` | `F7:05:C8:15:46:8C:DF:72:8F:8F:0F:FE:91:BF:42:C9:7A:53:57:4D` |
+| Debug (emulador / `expo run:android`) | `~/.android/debug.keystore` | `B8:4A:77:3A:53:EE:7C:19:CA:E6:E8:5B:6E:03:71:A1:93:88:1C:F9` |
+
+Passos no Console do Google (https://console.cloud.google.com):
+1. Abra seu projeto (`818387140252`).
+2. Vá em **APIs e serviços → Credenciais → ID do cliente OAuth 2.0**.
+3. Client **Web** (`818387140252-0drv1qdg8pjpqnts804604iv1alh56bk`): não mexa.
+   É ele que gera o token (webClientId) e serve de audience no backend.
+4. Crie um client **Android** com pacote `com.northoncardoso.klok` e o SHA-1
+   `F7:05:C8:...` da tabela acima. É o client dos builds gerados por `eas build`.
+5. Se quiser login Google também no emulador, crie um segundo client **Android**
+   com o mesmo pacote `com.northoncardoso.klok` e o SHA-1 `B8:4A:...`.
+6. Salve. Os client IDs Android gerados não precisam ir para o código: a
+   biblioteca usa apenas o webClientId.
+
+Para conferir o SHA-1 do keystore do EAS a qualquer momento:
+```bash
+npx eas-cli credentials -p android
+```
+
+Para o keystore local de debug:
 ```bash
 keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
 ```
 
-O SHA-1 do seu debug keystore é:
-
-```
-B8:4A:77:3A:53:EE:7C:19:CA:E6:E8:5B:6E:03:71:A1:93:88:1C:F9
-```
-
-Passos no Console do Google (https://console.cloud.google.com):
-1. Abra seu projeto (`818387140252`).
-2. **APIs e serviços → Credenciais → OAuth 2.0 Client IDs**.
-3. No client **Android** (`818387140252-tp0tep6oit9dei5444cf5prjgaopgv3m`),
-   edite e adicione o **SHA-1** acima.
-4. Salve. O login com Google passa a funcionar nos builds de desenvolvimento.
-
-> Para build de produção (APK/AAB via EAS), o SHA-1 é o do **keystore de
-> produção**, que você deve adicionar também.
+> Se você já instalou uma versão com o pacote antigo
+> `com.northoncardoso.myReactJobs`, desinstale antes de instalar o novo build.
+> Para build de produção (APK/AAB via EAS), o SHA-1 é o do keystore de
+> produção, que você deve registrar em um client Android próprio.
 
 ---
 
@@ -109,8 +126,6 @@ Autenticação: header `Authorization: Bearer <token>`.
 
 Raiz (app):
 - `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB` — Client ID web do Google (obrigatório p/ idToken)
-- `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID`
-- `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS`
 - `EXPO_PUBLIC_API_URL` — URL do backend
 
 `klok-api/.env`:

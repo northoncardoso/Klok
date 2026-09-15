@@ -1,13 +1,13 @@
 {
   "expo": {
     "name": "Klok",
-    "slug": "klok",
+    "slug": "myreactjobs",
     "scheme": "klok",
     "android": {
-      "package": "com.northoncardoso.myReactJobs"
+      "package": "com.northoncardoso.klok"
     },
     "ios": {
-      "bundleIdentifier": "com.northoncardoso.myReactJobs"
+      "bundleIdentifier": "com.northoncardoso.klok"
     },
     "extra": {
       "eas": {
@@ -17,6 +17,7 @@
     "plugins": [
       "@react-native-google-signin/google-signin",
       "expo-secure-store"
-    ]
+    ],
+    "owner": "northoncardoso"
   }
 }
