@@ -12,13 +12,7 @@ import {
 import { api } from '../api';
 import estilos from '../estilos';
 import CardFuncionario from '../CardFuncionario';
-
-type Funcionario = {
-    id: number;
-    nome: string;
-    numero: string;
-    email: string;
-};
+import type { Funcionario } from '../types';
 
 type FuncionariosScreenProps = {
     token: string;

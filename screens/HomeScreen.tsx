@@ -12,9 +12,10 @@ import {
 import { GoogleSignin, statusCodes, isErrorWithCode } from '@react-native-google-signin/google-signin';
 import estilos from '../estilos';
 import { api, salvarSessao } from '../api';
+import type { Sessao } from '../types';
 
 type HomeScreenProps = {
-    aoEntrar: (dados: { token: string; tipo: string; nome: string; id: number }) => void;
+    aoEntrar: (dados: Sessao) => void;
 };
 
 GoogleSignin.configure({

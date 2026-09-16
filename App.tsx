@@ -14,15 +14,9 @@ import HomeScreen from './screens/HomeScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
 import PontoScreen from './screens/PontoScreen';
 import { lerSessao, limparSessao } from './api';
+import type { Sessao } from './types';
 
 type Tela = 'Home' | 'Funcionarios' | 'Bater o ponto';
-
-type Sessao = {
-    token: string;
-    tipo: string;
-    nome: string;
-    id: number;
-};
 
 const LARGURA_MENU = Dimensions.get('window').width * 0.7;
 
@@ -40,7 +34,7 @@ export default function App() {
         (async () => {
             const s = await lerSessao();
             if (s && s.token) {
-                setSessao(s as Sessao);
+                setSessao(s);
                 setTelaAtual('Bater o ponto');
             }
             setRestaurando(false);
