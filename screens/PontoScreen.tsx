@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import estilos from '../estilos';
 import { api } from '../api';
+import type { Ponto } from '../types';
 
 type PontoScreenProps = {
     token: string;
@@ -9,7 +10,7 @@ type PontoScreenProps = {
 
 export default function PontoScreen({ token }: PontoScreenProps) {
     const [horaAtual, setHoraAtual] = useState(new Date());
-    const [pontos, setPontos] = useState<any[]>([]);
+    const [pontos, setPontos] = useState<Ponto[]>([]);
     const [carregando, setCarregando] = useState(false);
 
     useEffect(() => {
