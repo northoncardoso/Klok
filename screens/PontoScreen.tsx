@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import estilos from '../estilos';
-import { api } from '../api';
+import { api, mensagemDeErro } from '../api';
 import type { Ponto } from '../types';
 
 type PontoScreenProps = {
@@ -23,8 +23,8 @@ export default function PontoScreen({ token }: PontoScreenProps) {
         try {
             const lista = await api.meusPontos(token);
             setPontos(lista);
-        } catch (e: any) {
-            console.log('Erro ao carregar pontos:', e.message);
+        } catch (e) {
+            console.log('Erro ao carregar pontos:', mensagemDeErro(e));
         }
     };
 
@@ -52,8 +52,8 @@ export default function PontoScreen({ token }: PontoScreenProps) {
             await api.baterPonto('batida', token);
             Alert.alert('Ponto Registrado', `Ponto batido às ${formatarHora(new Date())}`);
             await carregarPontos();
-        } catch (e: any) {
-            Alert.alert('Erro', e.message);
+        } catch (e) {
+            Alert.alert('Erro', mensagemDeErro(e));
         } finally {
             setCarregando(false);
         }

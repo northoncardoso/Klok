@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { GoogleSignin, statusCodes, isErrorWithCode } from '@react-native-google-signin/google-signin';
 import estilos from '../estilos';
-import { api, salvarSessao } from '../api';
+import { api, salvarSessao, mensagemDeErro } from '../api';
 import type { Sessao } from '../types';
 
 type HomeScreenProps = {
@@ -40,8 +40,8 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             const dados = await api.login(usuario.trim(), senha);
             await salvarSessao(dados);
             aoEntrar(dados);
-        } catch (e: any) {
-            Alert.alert('Erro', e.message);
+        } catch (e) {
+            Alert.alert('Erro', mensagemDeErro(e));
         } finally {
             setCarregando(false);
         }
@@ -59,8 +59,8 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             setModoCadastro(false);
             setSenha('');
             setNome('');
-        } catch (e: any) {
-            Alert.alert('Erro', e.message);
+        } catch (e) {
+            Alert.alert('Erro', mensagemDeErro(e));
         } finally {
             setCarregando(false);
         }
@@ -81,7 +81,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             const dados = await api.loginGoogle(idToken);
             await salvarSessao(dados);
             aoEntrar(dados);
-        } catch (e: any) {
+        } catch (e) {
             if (isErrorWithCode(e) && e.code === statusCodes.SIGN_IN_CANCELLED) {
                 // usuário cancelou
             } else if (isErrorWithCode(e) && e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
