@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+
+const PREFIXO_HASH = 'scrypt$';
 
 export function criarBanco(caminho = 'klok.db') {
     const db = new DatabaseSync(caminho);
@@ -36,13 +38,32 @@ export function criarBanco(caminho = 'klok.db') {
     function criarUsuarioMestre() {
         const existe = db.prepare('SELECT id FROM usuarios WHERE usuario = ?').get('mestre');
         if (existe) return;
+        const senha = process.env.SENHA_MESTRE;
+        if (!senha) {
+            throw new Error('SENHA_MESTRE não definida. Configure a variável de ambiente antes de subir a API.');
+        }
         db.prepare(
             'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId) VALUES (?, ?, ?, ?)'
-        ).run('mestre', gerarHash('1234'), 'mestre', null);
+        ).run('mestre', criarHashSenha(senha), 'mestre', null);
     }
 
-    function gerarHash(senha) {
-        return createHash('sha256').update(senha).digest('hex');
+    function criarHashSenha(senha) {
+        const sal = randomBytes(16).toString('hex');
+        const hash = scryptSync(senha, sal, 64).toString('hex');
+        return `${PREFIXO_HASH}${sal}$${hash}`;
+    }
+
+    function verificarSenha(senha, hashArmazenada) {
+        if (hashArmazenada?.startsWith(PREFIXO_HASH)) {
+            const partes = hashArmazenada.slice(PREFIXO_HASH.length).split('$');
+            if (partes.length !== 2) return false;
+            const [sal, hashEsperado] = partes;
+            const hashGerado = scryptSync(senha, sal, 64);
+            const esperado = Buffer.from(hashEsperado, 'hex');
+            if (hashGerado.length !== esperado.length) return false;
+            return timingSafeEqual(hashGerado, esperado);
+        }
+        return false;
     }
 
     function criarFuncionario(nome, numero, email) {
@@ -76,7 +97,7 @@ export function criarBanco(caminho = 'klok.db') {
         const funcionarioId = criarFuncionario(nome || usuario, '', '');
         db.prepare(
             'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId) VALUES (?, ?, ?, ?)'
-        ).run(usuario, gerarHash(senha), 'funcionario', funcionarioId);
+        ).run(usuario, criarHashSenha(senha), 'funcionario', funcionarioId);
         return buscarUsuarioPorLogin(usuario);
     }
 
@@ -106,7 +127,13 @@ export function criarBanco(caminho = 'klok.db') {
     function validarSenha(usuario, senha) {
         const u = buscarUsuarioPorLogin(usuario);
         if (!u || !u.senhaHash) return null;
-        if (u.senhaHash !== gerarHash(senha)) return null;
+        if (u.senhaHash.startsWith(PREFIXO_HASH)) {
+            return verificarSenha(senha, u.senhaHash) ? u : null;
+        }
+        const hashLegado = createHash('sha256').update(senha).digest('hex');
+        if (hashLegado !== u.senhaHash) return null;
+        const novo = criarHashSenha(senha);
+        db.prepare('UPDATE usuarios SET senhaHash = ? WHERE id = ?').run(novo, u.id);
         return u;
     }
 
@@ -137,7 +164,8 @@ export function criarBanco(caminho = 'klok.db') {
     return {
         db,
         criarUsuarioMestre,
-        gerarHash,
+        criarHashSenha,
+        verificarSenha,
         criarFuncionario,
         listarFuncionarios,
         buscarFuncionario,

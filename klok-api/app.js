@@ -6,8 +6,39 @@ export function criarApp({ banco, clienteGoogle }) {
     const app = express();
     app.use(express.json());
 
-    const SECRETO = new TextEncoder().encode(process.env.JWT_SECRET || 'klok-segredo-dev');
+    const segredo = process.env.JWT_SECRET;
+    if (!segredo) {
+        throw new Error('JWT_SECRET não definido. Configure a variável de ambiente antes de subir a API.');
+    }
+    const SECRETO = new TextEncoder().encode(segredo);
     const googleClient = clienteGoogle ?? new OAuth2Client(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB);
+
+    function criarRateLimit({ janelaMs = 15 * 60 * 1000, max = 20, mensagem }) {
+        const porIp = new Map();
+        return (req, res, next) => {
+            const agora = Date.now();
+            const registro = porIp.get(req.ip);
+            if (!registro || agora > registro.ate) {
+                porIp.set(req.ip, { cont: 1, ate: agora + janelaMs });
+                if (porIp.size >= 10000) {
+                    for (const [chave, valor] of porIp) {
+                        if (agora > valor.ate) porIp.delete(chave);
+                    }
+                }
+                return next();
+            }
+            if (registro.cont > max) {
+                return res.status(429).json({ erro: mensagem });
+            }
+            registro.cont += 1;
+            next();
+        };
+    }
+
+    const limitadorAuth = criarRateLimit({
+        max: 20,
+        mensagem: 'Muitas tentativas de autenticação. Aguarde alguns minutos e tente de novo.',
+    });
 
     async function gerarToken(usuario) {
         return new SignJWT({ sub: String(usuario.id), tipo: usuario.tipo })
@@ -42,7 +73,7 @@ export function criarApp({ banco, clienteGoogle }) {
 
     // ---------- Autenticação ----------
 
-    app.post('/api/auth/registrar', (req, res) => {
+    app.post('/api/auth/registrar', limitadorAuth, (req, res) => {
         const { usuario, senha, nome } = req.body;
         if (!usuario?.trim() || !senha) {
             return res.status(400).json({ erro: 'Informe usuário e senha' });
@@ -55,7 +86,7 @@ export function criarApp({ banco, clienteGoogle }) {
         }
     });
 
-    app.post('/api/auth/login', async (req, res) => {
+    app.post('/api/auth/login', limitadorAuth, async (req, res) => {
         const { usuario, senha } = req.body;
         const encontrado = banco.validarSenha(usuario?.trim(), senha);
         if (!encontrado) {
@@ -65,7 +96,7 @@ export function criarApp({ banco, clienteGoogle }) {
         res.json({ token, tipo: encontrado.tipo, nome: encontrado.usuario, id: encontrado.id });
     });
 
-    app.post('/api/auth/google', async (req, res) => {
+    app.post('/api/auth/google', limitadorAuth, async (req, res) => {
         const { idToken } = req.body;
         if (!idToken) return res.status(400).json({ erro: 'Token do Google ausente' });
         try {

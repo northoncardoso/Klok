@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { iniciarApp, logar } from './helpers.js';
+import { iniciarApp, logar, MESTRE_SENHA } from './helpers.js';
 
 test('registro de usuário e login local devolvem token', async (t) => {
     const s = await iniciarApp();
@@ -52,8 +52,24 @@ test('login do mestre devolve token e tipo mestre', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const token = await logar(s.baseUrl, 'mestre', '1234');
+    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
     assert.ok(token, 'mestre deve autenticar com a senha semeada');
+});
+
+test('rate limit bloqueia login após muitas tentativas', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    let ultimo = 0;
+    for (let i = 0; i < 22; i += 1) {
+        const resp = await fetch(`${s.baseUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ usuario: 'mestre', senha: 'senha-errada' }),
+        });
+        ultimo = resp.status;
+    }
+    assert.equal(ultimo, 429);
 });
 
 test('GET /api/auth/eu sem token retorna 401', async (t) => {
