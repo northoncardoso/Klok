@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { iniciarApp, logar } from './helpers.js';
+import { iniciarApp, logar, MESTRE_SENHA } from './helpers.js';
 
 async function registrarFuncionario(s, usuario) {
     await fetch(`${s.baseUrl}/api/auth/registrar`, {
@@ -33,7 +33,7 @@ test('listar funcionários como funcionario retorna 403', async (t) => {
 test('mestre cria, lista, edita e apaga funcionário', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    const token = await logar(s.baseUrl, 'mestre', '1234');
+    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
 
     const criar = await fetch(`${s.baseUrl}/api/funcionarios`, {
         method: 'POST',
@@ -69,7 +69,7 @@ test('mestre cria, lista, edita e apaga funcionário', async (t) => {
 test('criar funcionário sem nome retorna 400', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    const token = await logar(s.baseUrl, 'mestre', '1234');
+    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
 
     const resp = await fetch(`${s.baseUrl}/api/funcionarios`, {
         method: 'POST',

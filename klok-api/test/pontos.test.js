@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { iniciarApp, logar } from './helpers.js';
+import { iniciarApp, logar, MESTRE_SENHA } from './helpers.js';
 
 async function criarFuncionarioLogado(s, usuario) {
     await fetch(`${s.baseUrl}/api/auth/registrar`, {
@@ -49,7 +49,7 @@ test('mestre vê pontos de todos com nome do funcionario', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
     const tokenFunc = await criarFuncionarioLogado(s, 'ponto2');
-    const tokenMestre = await logar(s.baseUrl, 'mestre', '1234');
+    const tokenMestre = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
 
     await fetch(`${s.baseUrl}/api/pontos`, {
         method: 'POST',
@@ -69,7 +69,7 @@ test('mestre vê pontos de todos com nome do funcionario', async (t) => {
 test('mestre sem funcionário vinculado não consegue bater ponto', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    const token = await logar(s.baseUrl, 'mestre', '1234');
+    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
 
     const resp = await fetch(`${s.baseUrl}/api/pontos`, {
         method: 'POST',

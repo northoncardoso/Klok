@@ -42,7 +42,9 @@ npm install
 npm start                 # sobe na porta 3000
 ```
 
-Na primeira execução é criado o usuário **mestre** com login `mestre` / senha `1234`.
+Na primeira execução é criado o usuário **mestre** com login `mestre` e a senha
+definida em `SENHA_MESTRE` (variável de ambiente do backend). O boot falha se
+`SENHA_MESTRE` ou `JWT_SECRET` não estiverem configurados.
 
 ### 2. App (Expo)
 
@@ -130,5 +132,6 @@ Raiz (app):
 
 `klok-api/.env`:
 - `PORT`
-- `JWT_SECRET` — segredo para assinar os tokens
+- `JWT_SECRET` — segredo para assinar os tokens (obrigatório, sem fallback)
+- `SENHA_MESTRE` — senha inicial do usuário mestre (obrigatório no primeiro boot)
 - `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB` — mesma audience usada para validar o token

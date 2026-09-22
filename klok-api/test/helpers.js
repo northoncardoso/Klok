@@ -2,6 +2,9 @@ import { criarBanco } from '../db.js';
 import { criarApp } from '../app.js';
 
 process.env.JWT_SECRET ??= 'segredo-de-teste';
+process.env.SENHA_MESTRE ??= 'senha-mestre-teste';
+
+export const MESTRE_SENHA = process.env.SENHA_MESTRE;
 
 export async function iniciarApp(opcoes = {}) {
     const banco = criarBanco(':memory:');
