@@ -78,3 +78,28 @@ test('criar funcionário sem nome retorna 400', async (t) => {
     });
     assert.equal(resp.status, 400);
 });
+
+test('editar funcionário inexistente retorna 404', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
+
+    const resp = await fetch(`${s.baseUrl}/api/funcionarios/9999`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nome: 'Fantasma' }),
+    });
+    assert.equal(resp.status, 404);
+});
+
+test('apagar funcionário inexistente retorna 404', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
+
+    const resp = await fetch(`${s.baseUrl}/api/funcionarios/9999`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(resp.status, 404);
+});
