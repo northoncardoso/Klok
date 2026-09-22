@@ -47,6 +47,11 @@ export async function limparSessao(): Promise<void> {
     await SecureStore.deleteItemAsync(SESSION_KEY);
 }
 
+export function mensagemDeErro(e: unknown): string {
+    if (e instanceof Error && e.message) return e.message;
+    return 'Erro inesperado. Tente novamente.';
+}
+
 async function requisicao<T>(caminho: string, metodo = 'GET', corpo: unknown = null, token?: string): Promise<T> {
     const t = token || (await SecureStore.getItemAsync(TOKEN_KEY));
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

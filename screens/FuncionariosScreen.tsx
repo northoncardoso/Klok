@@ -9,7 +9,7 @@ import {
     Alert,
 } from 'react-native';
 
-import { api } from '../api';
+import { api, mensagemDeErro } from '../api';
 import estilos from '../estilos';
 import CardFuncionario from '../CardFuncionario';
 import type { Funcionario } from '../types';
@@ -34,8 +34,8 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
         try {
             const lista = await api.listarFuncionarios(token);
             setListaFuncionarios(lista);
-        } catch (e: any) {
-            Alert.alert('Erro', e.message);
+        } catch (e) {
+            Alert.alert('Erro', mensagemDeErro(e));
         }
     };
 
@@ -50,8 +50,8 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
             setNomeNovo('');
             setNumeroNovo('');
             setEmailNovo('');
-        } catch (e: any) {
-            Alert.alert('Erro', e.message);
+        } catch (e) {
+            Alert.alert('Erro', mensagemDeErro(e));
         }
     };
 
@@ -59,8 +59,8 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
         try {
             await api.deletarFuncionario(id, token);
             await carregarFuncionarios();
-        } catch (e: any) {
-            Alert.alert('Erro', e.message);
+        } catch (e) {
+            Alert.alert('Erro', mensagemDeErro(e));
         }
     };
 
@@ -68,8 +68,8 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
         try {
             await api.atualizarFuncionario(id, { nome, numero, email }, token);
             await carregarFuncionarios();
-        } catch (e: any) {
-            Alert.alert('Erro', e.message);
+        } catch (e) {
+            Alert.alert('Erro', mensagemDeErro(e));
         }
     };
 
