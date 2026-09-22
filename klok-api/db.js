@@ -3,37 +3,62 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 
 const PREFIXO_HASH = 'scrypt$';
 
+export const MIGRACOES = [
+    {
+        versao: 1,
+        nome: 'cria as tabelas iniciais',
+        sql: `
+            CREATE TABLE IF NOT EXISTS funcionarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                numero TEXT DEFAULT '',
+                email TEXT DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario TEXT UNIQUE,
+                senhaHash TEXT,
+                tipo TEXT NOT NULL DEFAULT 'funcionario',
+                funcionarioId INTEGER,
+                googleId TEXT UNIQUE,
+                FOREIGN KEY (funcionarioId) REFERENCES funcionarios(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS pontos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                funcionarioId INTEGER NOT NULL,
+                dataHora TEXT NOT NULL,
+                tipo TEXT NOT NULL DEFAULT 'batida',
+                FOREIGN KEY (funcionarioId) REFERENCES funcionarios(id)
+            );
+        `,
+    },
+];
+
 export function criarBanco(caminho = 'klok.db') {
     const db = new DatabaseSync(caminho);
 
-    db.exec(`
-        PRAGMA journal_mode = WAL;
+    db.exec('PRAGMA journal_mode = WAL;');
 
-        CREATE TABLE IF NOT EXISTS funcionarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            numero TEXT DEFAULT '',
-            email TEXT DEFAULT ''
-        );
+    function aplicarMigracoes() {
+        const linha = db.prepare('PRAGMA user_version').get();
+        const atual = Number(linha.user_version);
+        for (const migracao of MIGRACOES) {
+            if (migracao.versao <= atual) continue;
+            db.exec('BEGIN');
+            try {
+                db.exec(migracao.sql);
+                db.exec(`PRAGMA user_version = ${migracao.versao}`);
+                db.exec('COMMIT');
+            } catch (e) {
+                db.exec('ROLLBACK');
+                throw e;
+            }
+        }
+    }
 
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT UNIQUE,
-            senhaHash TEXT,
-            tipo TEXT NOT NULL DEFAULT 'funcionario',
-            funcionarioId INTEGER,
-            googleId TEXT UNIQUE,
-            FOREIGN KEY (funcionarioId) REFERENCES funcionarios(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS pontos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            funcionarioId INTEGER NOT NULL,
-            dataHora TEXT NOT NULL,
-            tipo TEXT NOT NULL DEFAULT 'batida',
-            FOREIGN KEY (funcionarioId) REFERENCES funcionarios(id)
-        );
-    `);
+    aplicarMigracoes();
 
     function criarUsuarioMestre() {
         const existe = db.prepare('SELECT id FROM usuarios WHERE usuario = ?').get('mestre');
@@ -171,6 +196,7 @@ export function criarBanco(caminho = 'klok.db') {
 
     return {
         db,
+        userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
         criarUsuarioMestre,
         criarHashSenha,
         verificarSenha,
