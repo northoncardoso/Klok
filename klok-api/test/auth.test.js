@@ -36,6 +36,24 @@ test('registro sem usuário ou senha retorna 400', async (t) => {
     assert.equal(resp.status, 400);
 });
 
+test('registro com usuário duplicado retorna 409', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    const corpo = { usuario: 'duplicado', senha: '123456' };
+    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(corpo),
+    });
+    const duplicado = await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(corpo),
+    });
+    assert.equal(duplicado.status, 409);
+});
+
 test('login com senha errada retorna 401', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());

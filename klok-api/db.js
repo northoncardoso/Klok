@@ -88,9 +88,17 @@ export function criarBanco(caminho = 'klok.db') {
     }
 
     function apagarFuncionario(id) {
-        db.prepare('DELETE FROM pontos WHERE funcionarioId = ?').run(id);
-        db.prepare('DELETE FROM usuarios WHERE funcionarioId = ?').run(id);
-        db.prepare('DELETE FROM funcionarios WHERE id = ?').run(id);
+        db.exec('BEGIN');
+        try {
+            db.prepare('DELETE FROM pontos WHERE funcionarioId = ?').run(id);
+            db.prepare('DELETE FROM usuarios WHERE funcionarioId = ?').run(id);
+            const r = db.prepare('DELETE FROM funcionarios WHERE id = ?').run(id);
+            db.exec('COMMIT');
+            return r.changes > 0;
+        } catch (e) {
+            db.exec('ROLLBACK');
+            throw e;
+        }
     }
 
     function criarUsuarioLocal(usuario, senha, nome) {

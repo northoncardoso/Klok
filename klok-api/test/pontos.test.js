@@ -78,3 +78,16 @@ test('mestre sem funcionário vinculado não consegue bater ponto', async (t) =>
     });
     assert.equal(resp.status, 400);
 });
+
+test('bater ponto com tipo inválido retorna 400', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const token = await criarFuncionarioLogado(s, 'tipo-invalido');
+
+    const resp = await fetch(`${s.baseUrl}/api/pontos`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tipo: 'almoco' }),
+    });
+    assert.equal(resp.status, 400);
+});

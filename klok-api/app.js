@@ -78,6 +78,9 @@ export function criarApp({ banco, clienteGoogle }) {
         if (!usuario?.trim() || !senha) {
             return res.status(400).json({ erro: 'Informe usuário e senha' });
         }
+        if (banco.buscarUsuarioPorLogin(usuario.trim())) {
+            return res.status(409).json({ erro: 'Usuário já existe' });
+        }
         try {
             const novo = banco.criarUsuarioLocal(usuario.trim(), senha, nome?.trim());
             res.status(201).json({ sucesso: true, mensagem: 'Usuário cadastrado' });
@@ -140,13 +143,20 @@ export function criarApp({ banco, clienteGoogle }) {
     });
 
     app.put('/api/funcionarios/:id', autenticar, exigirMestre, (req, res) => {
+        const id = Number(req.params.id);
+        if (!banco.buscarFuncionario(id)) {
+            return res.status(404).json({ erro: 'Funcionário não encontrado' });
+        }
         const { nome, numero, email } = req.body;
-        banco.atualizarFuncionario(Number(req.params.id), nome?.trim(), numero, email);
-        res.json(banco.buscarFuncionario(Number(req.params.id)));
+        banco.atualizarFuncionario(id, nome?.trim(), numero, email);
+        res.json(banco.buscarFuncionario(id));
     });
 
     app.delete('/api/funcionarios/:id', autenticar, exigirMestre, (req, res) => {
-        banco.apagarFuncionario(Number(req.params.id));
+        const apagou = banco.apagarFuncionario(Number(req.params.id));
+        if (!apagou) {
+            return res.status(404).json({ erro: 'Funcionário não encontrado' });
+        }
         res.status(204).end();
     });
 
@@ -156,6 +166,12 @@ export function criarApp({ banco, clienteGoogle }) {
         const { tipo } = req.body;
         if (req.usuario.funcionarioId == null) {
             return res.status(400).json({ erro: 'Usuário sem funcionário vinculado' });
+        }
+        if (tipo && tipo !== 'batida') {
+            return res.status(400).json({ erro: 'Tipo de ponto inválido' });
+        }
+        if (!banco.buscarFuncionario(req.usuario.funcionarioId)) {
+            return res.status(400).json({ erro: 'Funcionário não encontrado' });
         }
         const ponto = banco.baterPonto(req.usuario.funcionarioId, tipo || 'batida');
         res.status(201).json(ponto);
