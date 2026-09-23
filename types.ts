@@ -37,4 +37,9 @@ export type UsuarioInfo = {
     id: number;
     usuario: string;
     tipo: Papel;
+    funcionarioId: number | null;
+    hasSenha: boolean;
+    nome: string;
+    numero: string;
+    email: string;
 };

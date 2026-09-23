@@ -5,8 +5,10 @@ import { criarAutenticar, criarExigirMestre } from './middlewares.js';
 import { criarRotaAuth } from './rotas/auth.js';
 import { criarRotaFuncionarios } from './rotas/funcionarios.js';
 import { criarRotaPontos } from './rotas/pontos.js';
+import { criarControladoresAuth } from './controladores/auth.js';
+import { criarEnviarEmail } from './email.js';
 
-export function criarApp({ banco, clienteGoogle }) {
+export function criarApp({ banco, clienteGoogle, enviarEmail }) {
     const segredo = process.env.JWT_SECRET;
     if (!segredo) {
         throw new Error('JWT_SECRET não definido. Configure a variável de ambiente antes de subir a API.');
@@ -51,6 +53,8 @@ export function criarApp({ banco, clienteGoogle }) {
 
     const autenticar = criarAutenticar({ banco, segredo: SECRETO });
     const exigirMestre = criarExigirMestre();
+    const enviarEmailFinal =
+        enviarEmail ?? criarEnviarEmail();
 
     const app = express();
     app.use(express.json());
@@ -62,11 +66,13 @@ export function criarApp({ banco, clienteGoogle }) {
         limitadorAuth,
         autenticar,
         exigirMestre,
+        enviarEmail: enviarEmailFinal,
     };
 
     app.use('/api/auth', criarRotaAuth(deps));
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
+    app.get('/redefinir-senha/:token', criarControladoresAuth(deps).paginaRedefinicao);
 
     return app;
 }

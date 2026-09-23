@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { GoogleSignin, statusCodes, isErrorWithCode } from '@react-native-google-signin/google-signin';
 import estilos from '../estilos';
+import InputSenha from '../InputSenha';
+import FormularioRecuperarSenha from './FormularioRecuperarSenha';
 import { api, salvarSessao, mensagemDeErro } from '../api';
 import type { Sessao } from '../types';
 
@@ -28,6 +30,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
     const [senha, setSenha] = useState('');
     const [nome, setNome] = useState('');
     const [modoCadastro, setModoCadastro] = useState(false);
+    const [modoRecuperar, setModoRecuperar] = useState(false);
     const [carregando, setCarregando] = useState(false);
 
     const entrar = async () => {
@@ -101,74 +104,95 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         >
             <Text style={estilos.estilosLoginTitulo}>Klok</Text>
             <Text style={estilos.estilosLoginSubtitulo}>
-                {modoCadastro ? 'Crie sua conta' : 'Faça login para continuar'}
+                {modoRecuperar
+                    ? 'Recuperar senha'
+                    : modoCadastro
+                        ? 'Crie sua conta'
+                        : 'Faça login para continuar'}
             </Text>
 
-            {modoCadastro && (
-                <TextInput
-                    placeholder="Nome"
-                    value={nome}
-                    onChangeText={setNome}
-                    style={estilos.estilosLoginInput}
-                    placeholderTextColor="gray"
+            {modoRecuperar && (
+                <FormularioRecuperarSenha
+                    onVoltar={() => setModoRecuperar(false)}
+                    onEnviado={() => setModoRecuperar(false)}
                 />
             )}
 
-            <TextInput
-                placeholder="Usuário"
-                value={usuario}
-                onChangeText={setUsuario}
-                style={estilos.estilosLoginInput}
-                autoCapitalize="none"
-                placeholderTextColor="gray"
-            />
+            {!modoRecuperar && (
+                <>
+                    {modoCadastro && (
+                        <TextInput
+                            placeholder="Nome"
+                            value={nome}
+                            onChangeText={setNome}
+                            style={estilos.estilosLoginInput}
+                            placeholderTextColor="gray"
+                        />
+                    )}
 
-            <TextInput
-                placeholder="Senha"
-                value={senha}
-                onChangeText={setSenha}
-                style={estilos.estilosLoginInput}
-                secureTextEntry
-                placeholderTextColor="gray"
-            />
+                    <TextInput
+                        placeholder="Usuário"
+                        value={usuario}
+                        onChangeText={setUsuario}
+                        style={estilos.estilosLoginInput}
+                        autoCapitalize="none"
+                        placeholderTextColor="gray"
+                    />
 
-            {modoCadastro ? (
-                <TouchableOpacity
-                    style={estilos.estilosLoginBotaoEntrar}
-                    onPress={cadastrar}
-                    disabled={carregando}
-                >
-                    <Text style={estilos.estilosPontoTextoBotao}>
-                        {carregando ? 'Cadastrando...' : 'Cadastrar'}
-                    </Text>
-                </TouchableOpacity>
-            ) : (
-                <TouchableOpacity
-                    style={estilos.estilosLoginBotaoEntrar}
-                    onPress={entrar}
-                    disabled={carregando}
-                >
-                    <Text style={estilos.estilosPontoTextoBotao}>
-                        {carregando ? 'Entrando...' : 'Entrar'}
-                    </Text>
-                </TouchableOpacity>
+                    <InputSenha
+                        placeholder="Senha"
+                        value={senha}
+                        onChangeText={setSenha}
+                        style={{ width: '85%', alignSelf: 'center', marginBottom: 15 }}
+                    />
+
+                    {modoCadastro ? (
+                        <TouchableOpacity
+                            style={estilos.estilosLoginBotaoEntrar}
+                            onPress={cadastrar}
+                            disabled={carregando}
+                        >
+                            <Text style={estilos.estilosPontoTextoBotao}>
+                                {carregando ? 'Cadastrando...' : 'Cadastrar'}
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={estilos.estilosLoginBotaoEntrar}
+                            onPress={entrar}
+                            disabled={carregando}
+                        >
+                            <Text style={estilos.estilosPontoTextoBotao}>
+                                {carregando ? 'Entrando...' : 'Entrar'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {!modoCadastro && (
+                        <TouchableOpacity onPress={() => setModoRecuperar(true)}>
+                            <Text style={{ color: 'dodgerblue', marginTop: 12, fontSize: 14 }}>
+                                Esqueci minha senha?
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                        style={estilos.estilosLoginBotaoGoogle}
+                        onPress={entrarComGoogle}
+                        disabled={carregando}
+                    >
+                        <Text style={estilos.estilosPontoTextoBotao}>Entrar com Google</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => setModoCadastro(!modoCadastro)}>
+                        <Text style={estilos.estilosLoginLinkAlternar}>
+                            {modoCadastro
+                                ? 'Já tem conta? Fazer login'
+                                : 'Não tem conta? Cadastre-se'}
+                        </Text>
+                    </TouchableOpacity>
+                </>
             )}
-
-            <TouchableOpacity
-                style={estilos.estilosLoginBotaoGoogle}
-                onPress={entrarComGoogle}
-                disabled={carregando}
-            >
-                <Text style={estilos.estilosPontoTextoBotao}>Entrar com Google</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setModoCadastro(!modoCadastro)}>
-                <Text style={estilos.estilosLoginLinkAlternar}>
-                    {modoCadastro
-                        ? 'Já tem conta? Fazer login'
-                        : 'Não tem conta? Cadastre-se'}
-                </Text>
-            </TouchableOpacity>
         </KeyboardAvoidingView>
     );
 }

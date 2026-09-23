@@ -10,6 +10,10 @@ export function criarRotaAuth(deps) {
     rota.post('/login', limitadorAuth, c.login);
     rota.post('/google', limitadorAuth, c.loginGoogle);
     rota.get('/eu', autenticar, c.eu);
+    rota.put('/eu', autenticar, c.atualizarDados);
+    rota.put('/senha', autenticar, c.alterarSenha);
+    rota.post('/esqueci-senha', limitadorAuth, c.esqueciSenha);
+    rota.post('/redefinir-senha', limitadorAuth, c.redefinirSenha);
 
     return rota;
 }

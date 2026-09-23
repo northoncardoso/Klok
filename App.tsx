@@ -7,18 +7,32 @@ import {
     Animated,
     Dimensions,
     ActivityIndicator,
+    Linking,
 } from 'react-native';
 
 import estilos from './estilos';
 import HomeScreen from './screens/HomeScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
 import PontoScreen from './screens/PontoScreen';
-import { lerSessao, limparSessao } from './api';
+import RedefinirSenhaScreen from './screens/RedefinirSenhaScreen';
+import UsuarioScreen from './screens/UsuarioScreen';
+import { lerSessao, limparSessao, salvarSessao } from './api';
 import type { Sessao } from './types';
 
-type Tela = 'Home' | 'Funcionarios' | 'Bater o ponto';
+type Tela = 'Home' | 'Funcionarios' | 'Bater o ponto' | 'Usuario';
 
 const LARGURA_MENU = Dimensions.get('window').width * 0.7;
+
+function tokenDeLinkDeRedefinicao(url: string): string | null {
+    try {
+        const inicio = url.indexOf('token=');
+        if (inicio === -1) return null;
+        const token = url.slice(inicio + 6);
+        return token || null;
+    } catch {
+        return null;
+    }
+}
 
 export default function App() {
     const [telaAtual, setTelaAtual] = useState<Tela>('Home');
@@ -26,9 +40,21 @@ export default function App() {
     const [sessao, setSessao] = useState<Sessao | null>(null);
     const [restaurando, setRestaurando] = useState(true);
     const [modalSairVisivel, setModalSairVisivel] = useState(false);
+    const [tokenRedefinir, setTokenRedefinir] = useState<string | null>(null);
 
     const posicaoMenu = useRef(new Animated.Value(-LARGURA_MENU)).current;
     const opacidadeOverlay = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const aplicarLink = (url?: string | null) => {
+            if (!url) return;
+            const token = tokenDeLinkDeRedefinicao(url);
+            if (token) setTokenRedefinir(token);
+        };
+        Linking.getInitialURL().then(aplicarLink);
+        const sub = Linking.addEventListener('url', ({ url }) => aplicarLink(url));
+        return () => sub.remove();
+    }, []);
 
     useEffect(() => {
         (async () => {
@@ -69,7 +95,32 @@ export default function App() {
         fecharMenu();
     };
 
+    const atualizarNomeSessao = (nome: string) => {
+        setSessao((atual) => {
+            if (!atual) return atual;
+            const nova = { ...atual, nome };
+            salvarSessao(nova);
+            return nova;
+        });
+    };
+
+    const aoConcluirRedefinicao = async () => {
+        setTokenRedefinir(null);
+        await limparSessao();
+        setSessao(null);
+        setTelaAtual('Home');
+    };
+
     const renderizarTela = () => {
+        if (tokenRedefinir) {
+            return (
+                <RedefinirSenhaScreen
+                    token={tokenRedefinir}
+                    aoConcluir={aoConcluirRedefinicao}
+                />
+            );
+        }
+
         if (!sessao) {
             return (
                 <HomeScreen
@@ -99,6 +150,8 @@ export default function App() {
                 ) : null;
             case 'Bater o ponto':
                 return <PontoScreen token={sessao.token} />;
+            case 'Usuario':
+                return <UsuarioScreen token={sessao.token} aoAtualizarNome={atualizarNomeSessao} />;
             default:
                 return null;
         }
@@ -153,6 +206,12 @@ export default function App() {
                         {sessao && (
                             <TouchableOpacity style={estilos.estilosMenuItemMenu} onPress={() => irPara('Bater o ponto')}>
                                 <Text style={estilos.estilosMenuTextoItemMenu}>Bater o ponto</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {sessao && (
+                            <TouchableOpacity style={estilos.estilosMenuItemMenu} onPress={() => irPara('Usuario')}>
+                                <Text style={estilos.estilosMenuTextoItemMenu}>Usuário</Text>
                             </TouchableOpacity>
                         )}
 

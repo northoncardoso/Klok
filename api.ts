@@ -79,6 +79,14 @@ export const api = {
         requisicao<Sessao>('/api/auth/google', 'POST', { idToken }),
     me: (token: string): Promise<UsuarioInfo> =>
         requisicao<UsuarioInfo>('/api/auth/eu', 'GET', null, token),
+    atualizarEu: (dados: FuncionarioCriar, token: string): Promise<UsuarioInfo> =>
+        requisicao<UsuarioInfo>('/api/auth/eu', 'PUT', dados, token),
+    alterarSenha: (senhaAtual: string, senhaNova: string, token: string): Promise<{ sucesso: boolean; mensagem: string }> =>
+        requisicao<{ sucesso: boolean; mensagem: string }>('/api/auth/senha', 'PUT', { senhaAtual, senhaNova }, token),
+    esqueciSenha: (email: string): Promise<{ sucesso: boolean; mensagem: string; linkRedefinicao?: string }> =>
+        requisicao<{ sucesso: boolean; mensagem: string; linkRedefinicao?: string }>('/api/auth/esqueci-senha', 'POST', { email }),
+    redefinirSenha: (token: string, novaSenha: string): Promise<{ sucesso: boolean; mensagem: string }> =>
+        requisicao<{ sucesso: boolean; mensagem: string }>('/api/auth/redefinir-senha', 'POST', { token, novaSenha }),
     listarFuncionarios: (token: string): Promise<Funcionario[]> =>
         requisicao<Funcionario[]>('/api/funcionarios', 'GET', null, token),
     criarFuncionario: (dados: FuncionarioCriar, token: string): Promise<Funcionario> =>

@@ -11,7 +11,7 @@ export async function iniciarApp(opcoes = {}) {
     const clienteGoogle =
         opcoes.clienteGoogle ??
         { verifyIdToken: async () => { throw new Error('cliente google não configurado'); } };
-    const app = criarApp({ banco, clienteGoogle });
+    const app = criarApp({ banco, clienteGoogle, enviarEmail: opcoes.enviarEmail });
     const servidor = app.listen(0);
     await new Promise((resolve) => servidor.once('listening', resolve));
     const baseUrl = `http://127.0.0.1:${servidor.address().port}`;
