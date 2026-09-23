@@ -158,3 +158,137 @@ test('login Google sem idToken retorna 400', async (t) => {
     });
     assert.equal(resp.status, 400);
 });
+
+test('GET /api/auth/eu devolve dados do perfil', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'carla', senha: '123456', nome: 'Carla Dias' }),
+    });
+    const token = await logar(s.baseUrl, 'carla', '123456');
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/eu`, {
+        headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(resp.status, 200);
+    const corpo = await resp.json();
+    assert.equal(corpo.nome, 'Carla Dias');
+    assert.equal(corpo.usuario, 'carla');
+    assert.equal(corpo.hasSenha, true);
+    assert.ok(corpo.funcionarioId != null, 'registro local cria funcionário vinculado');
+});
+
+test('PUT /api/auth/eu atualiza os dados do usuário', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'duda', senha: '123456', nome: 'Duda' }),
+    });
+    const token = await logar(s.baseUrl, 'duda', '123456');
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/eu`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nome: 'Duda Ferreira', numero: '11999999999', email: 'duda@mail.com' }),
+    });
+    assert.equal(resp.status, 200);
+    const corpo = await resp.json();
+    assert.equal(corpo.nome, 'Duda Ferreira');
+    assert.equal(corpo.numero, '11999999999');
+    assert.equal(corpo.email, 'duda@mail.com');
+});
+
+test('mestre também atualiza dados próprios pelo perfil', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/eu`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nome: 'Mestre da Empresa', numero: '', email: 'mestre@mail.com' }),
+    });
+    assert.equal(resp.status, 200);
+    const corpo = await resp.json();
+    assert.equal(corpo.nome, 'Mestre da Empresa');
+    assert.equal(corpo.email, 'mestre@mail.com');
+});
+
+test('senha atual incorreta retorna 401 e não altera a senha', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'eva', senha: '123456' }),
+    });
+    const token = await logar(s.baseUrl, 'eva', '123456');
+
+    const err = await fetch(`${s.baseUrl}/api/auth/senha`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ senhaAtual: 'errada', senhaNova: '654321' }),
+    });
+    assert.equal(err.status, 401);
+
+    const loginAntigo = await fetch(`${s.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'eva', senha: '123456' }),
+    });
+    assert.equal(loginAntigo.status, 200, 'senha antiga continua valendo');
+});
+
+test('trocar senha funciona e a nova passa a valer', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'fabi', senha: '123456' }),
+    });
+    const token = await logar(s.baseUrl, 'fabi', '123456');
+
+    const ok = await fetch(`${s.baseUrl}/api/auth/senha`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ senhaAtual: '123456', senhaNova: 'nova-senha-1' }),
+    });
+    assert.equal(ok.status, 200);
+
+    const antiga = await fetch(`${s.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'fabi', senha: '123456' }),
+    });
+    assert.equal(antiga.status, 401, 'senha antiga deixa de valer');
+
+    const nova = await fetch(`${s.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'fabi', senha: 'nova-senha-1' }),
+    });
+    assert.equal(nova.status, 200, 'nova senha passa a valer');
+});
+
+test('nova senha igual à atual retorna 400', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'gabi', senha: '123456' }),
+    });
+    const token = await logar(s.baseUrl, 'gabi', '123456');
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/senha`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ senhaAtual: '123456', senhaNova: '123456' }),
+    });
+    assert.equal(resp.status, 400);
+});

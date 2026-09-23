@@ -34,6 +34,32 @@ export const MIGRACOES = [
             );
         `,
     },
+    {
+        versao: 2,
+        nome: 'dados próprios de usuário para o perfil',
+        sql: `
+            ALTER TABLE usuarios ADD COLUMN nome TEXT DEFAULT '';
+            ALTER TABLE usuarios ADD COLUMN numero TEXT DEFAULT '';
+            ALTER TABLE usuarios ADD COLUMN email TEXT DEFAULT '';
+            UPDATE usuarios SET nome = usuario WHERE nome IS NULL OR nome = '';
+        `,
+    },
+    {
+        versao: 3,
+        nome: 'tokens de recuperação de senha',
+        sql: `
+            CREATE TABLE IF NOT EXISTS recuperacao_senha (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuarioId INTEGER NOT NULL,
+                tokenHash TEXT NOT NULL,
+                expiraEm TEXT NOT NULL,
+                usado INTEGER NOT NULL DEFAULT 0,
+                criadoEm TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (usuarioId) REFERENCES usuarios(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_recuperacao_token ON recuperacao_senha(tokenHash);
+        `,
+    },
 ];
 
 export function criarBanco(caminho = 'klok.db') {
@@ -112,6 +138,17 @@ export function criarBanco(caminho = 'klok.db') {
         ).run(nome, numero ?? '', email ?? '', id);
     }
 
+    function atualizarDadosUsuarios(id, nome, numero, email) {
+        db.prepare(
+            'UPDATE usuarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
+        ).run(nome ?? '', numero ?? '', email ?? '', id);
+        return buscarUsuarioPorId(id);
+    }
+
+    function atualizarSenha(id, hashSenha) {
+        db.prepare('UPDATE usuarios SET senhaHash = ? WHERE id = ?').run(hashSenha, id);
+    }
+
     function apagarFuncionario(id) {
         db.exec('BEGIN');
         try {
@@ -136,6 +173,28 @@ export function criarBanco(caminho = 'klok.db') {
 
     function buscarUsuarioPorLogin(usuario) {
         return db.prepare('SELECT * FROM usuarios WHERE usuario = ?').get(usuario);
+    }
+
+    function buscarUsuarioPorEmail(email) {
+        return db.prepare(
+            `SELECT u.* FROM usuarios u
+             LEFT JOIN funcionarios f ON f.id = u.funcionarioId
+             WHERE LOWER(u.email) = ? OR (f.email IS NOT NULL AND LOWER(f.email) = ?)`
+        ).get(email, email);
+    }
+
+    function criarRecuperacao(usuarioId, tokenHash, expiraEm) {
+        db.prepare(
+            'INSERT INTO recuperacao_senha (usuarioId, tokenHash, expiraEm) VALUES (?, ?, ?)'
+        ).run(usuarioId, tokenHash, expiraEm);
+    }
+
+    function buscarRecuperacaoPorToken(tokenHash) {
+        return db.prepare('SELECT * FROM recuperacao_senha WHERE tokenHash = ?').get(tokenHash);
+    }
+
+    function marcarRecuperacaoUsada(usuarioId) {
+        db.prepare('UPDATE recuperacao_senha SET usado = 1 WHERE usuarioId = ?').run(usuarioId);
     }
 
     function criarOuBuscarUsuarioGoogle(googleId, nome, email) {
@@ -204,9 +263,15 @@ export function criarBanco(caminho = 'klok.db') {
         listarFuncionarios,
         buscarFuncionario,
         atualizarFuncionario,
+        atualizarDadosUsuarios,
+        atualizarSenha,
         apagarFuncionario,
         criarUsuarioLocal,
         buscarUsuarioPorLogin,
+        buscarUsuarioPorEmail,
+        criarRecuperacao,
+        buscarRecuperacaoPorToken,
+        marcarRecuperacaoUsada,
         criarOuBuscarUsuarioGoogle,
         buscarUsuarioPorGoogleId,
         buscarUsuarioPorId,

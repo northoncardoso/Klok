@@ -339,6 +339,77 @@ import { StyleSheet } from 'react-native';
         borderRadius: 8,
         marginTop: 10,
         },
+        // Estilos do campo de senha com olho (InputSenha.tsx)
+        campoSenhaGrupo: {
+            flexDirection: "row",
+            alignItems: "center",
+            borderColor: "gray",
+            borderWidth: 1,
+            borderRadius: 8,
+            paddingHorizontal: 15,
+            backgroundColor: "white",
+        },
+        campoSenhaInput: {
+            flex: 1,
+            paddingVertical: 12,
+            color: "black",
+        },
+        campoSenhaBotao: {
+            padding: 4,
+            marginLeft: 8,
+        },
+        // Estilos tela usuário
+        containerUsuario: {
+            flex: 1,
+            padding: 20,
+        },
+        usuarioTitulo: {
+            fontSize: 22,
+            fontWeight: "bold",
+            marginBottom: 4,
+            textAlign: "center",
+        },
+        usuarioSubtitulo: {
+            fontSize: 14,
+            color: "gray",
+            marginBottom: 20,
+            textAlign: "center",
+        },
+        usuarioCartao: {
+            backgroundColor: "white",
+            borderRadius: 10,
+            padding: 16,
+            marginBottom: 20,
+            elevation: 2,
+        },
+        usuarioSecaoTitulo: {
+            fontSize: 16,
+            fontWeight: "bold",
+            marginBottom: 12,
+        },
+        usuarioInput: {
+            borderColor: "gray",
+            borderWidth: 1,
+            borderRadius: 8,
+            paddingHorizontal: 15,
+            paddingVertical: 12,
+            marginBottom: 12,
+            color: "black",
+        },
+        usuarioBotaoSalvar: {
+            backgroundColor: "dodgerblue",
+            paddingVertical: 12,
+            paddingHorizontal: 20,
+            borderRadius: 8,
+            alignItems: "center",
+            marginTop: 4,
+        },
+        usuarioModalCaixa: {
+            backgroundColor: "white",
+            padding: 20,
+            borderRadius: 10,
+            width: "90%",
+        },
     }
 );
 
