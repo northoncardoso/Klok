@@ -1,6 +1,12 @@
 import { jwtVerify } from 'jose';
 import { PAPEL_MESTRE } from './constantes.js';
 
+function tokenAnteriorATrocaDeSenha(payload, usuario) {
+    const versaoDoToken = Number(payload.v) || 0;
+    const versaoAtual = Number(usuario.senhaVersao) || 0;
+    return versaoDoToken !== versaoAtual;
+}
+
 export function criarAutenticar({ banco, segredo }) {
     return async function autenticar(req, res, next) {
         const header = req.headers.authorization;
@@ -11,6 +17,9 @@ export function criarAutenticar({ banco, segredo }) {
             const { payload } = await jwtVerify(header.slice(7), segredo, { algorithms: ['HS256'] });
             const usuario = banco.buscarUsuarioPorId(Number(payload.sub));
             if (!usuario) return res.status(401).json({ erro: 'Usuário não encontrado' });
+            if (tokenAnteriorATrocaDeSenha(payload, usuario)) {
+                return res.status(401).json({ erro: 'Sessão expirada, entre com a senha nova' });
+            }
             req.usuario = usuario;
             next();
         } catch {

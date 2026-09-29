@@ -44,7 +44,13 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     });
 
     async function gerarToken(usuario) {
-        return new SignJWT({ sub: String(usuario.id), tipo: usuario.tipo })
+        // A versão da senha viaja no token para que a troca de senha possa
+        // revogar as sessões anteriores, sem precisar de lista de revogação.
+        return new SignJWT({
+            sub: String(usuario.id),
+            tipo: usuario.tipo,
+            v: Number(usuario.senhaVersao) || 0,
+        })
             .setProtectedHeader({ alg: 'HS256' })
             .setIssuedAt()
             .setExpirationTime('12h')
