@@ -1,6 +1,96 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { iniciarApp, logar, MESTRE_SENHA } from './helpers.js';
+import { iniciarApp, criarMestre, logar, MESTRE, MESTRE_SENHA } from './helpers.js';
+
+test('GET /api/auth/mestre responde cadastrado false antes do primeiro acesso', async (t) => {
+    const s = await iniciarApp({ comMestre: false });
+    t.after(() => s.fechar());
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`);
+    assert.equal(resp.status, 200);
+    assert.deepEqual(await resp.json(), { cadastrado: false });
+});
+
+test('cadastrar o mestre cria o usuário, devolve token de mestre e já autentica', async (t) => {
+    const s = await iniciarApp({ comMestre: false });
+    t.after(() => s.fechar());
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(MESTRE),
+    });
+    assert.equal(resp.status, 201);
+    const corpo = await resp.json();
+    assert.equal(corpo.tipo, 'mestre');
+    assert.ok(corpo.token, 'deve devolver token para entrar direto no app');
+
+    const status = await (await fetch(`${s.baseUrl}/api/auth/mestre`)).json();
+    assert.equal(status.cadastrado, true);
+
+    const guardado = s.banco.db
+        .prepare('SELECT usuario, senhaHash, tipo, email, numero FROM usuarios WHERE usuario = ?')
+        .get(MESTRE.usuario);
+    assert.equal(guardado.tipo, 'mestre');
+    assert.ok(guardado.senhaHash.startsWith('scrypt$'), 'senha deve ser guardada com salt');
+    assert.equal(guardado.email, MESTRE.email);
+    assert.equal(guardado.numero, MESTRE.numero);
+
+    const token = await logar(s.baseUrl, MESTRE.usuario, MESTRE.senha);
+    assert.ok(token, 'o mestre deve conseguir fazer login com a senha escolhida');
+});
+
+test('cadastrar o mestre só pode ser feito uma vez', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...MESTRE, usuario: 'outro-mestre' }),
+    });
+    assert.equal(resp.status, 409);
+    assert.equal(s.banco.buscarUsuarioPorLogin('outro-mestre'), undefined, 'não pode criar segundo mestre');
+});
+
+test('cadastro do mestre exige usuário, senha, email e número', async (t) => {
+    const s = await iniciarApp({ comMestre: false });
+    t.after(() => s.fechar());
+
+    const invalidos = [
+        { ...MESTRE, usuario: '  ' },
+        { ...MESTRE, senha: '' },
+        { ...MESTRE, senha: '123' },
+        { ...MESTRE, email: '' },
+        { ...MESTRE, email: 'sem-arroba' },
+        { ...MESTRE, numero: '' },
+    ];
+
+    for (const corpo of invalidos) {
+        const resp = await fetch(`${s.baseUrl}/api/auth/mestre`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(corpo),
+        });
+        assert.equal(resp.status, 400, `esperava 400 para ${JSON.stringify(corpo)}`);
+    }
+
+    assert.equal(s.banco.existeMestre(), false, 'nenhum mestre deve ter sido criado');
+});
+
+test('email e número do mestre reaparecem no próprio perfil', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    const token = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const eu = await (await fetch(`${s.baseUrl}/api/auth/eu`, {
+        headers: { authorization: `Bearer ${token}` },
+    })).json();
+
+    assert.equal(eu.tipo, 'mestre');
+    assert.equal(eu.email, MESTRE.email);
+    assert.equal(eu.numero, MESTRE.numero);
+});
 
 test('registro de usuário e login local devolvem token', async (t) => {
     const s = await iniciarApp();

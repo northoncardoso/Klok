@@ -33,6 +33,17 @@ export type RegistroUsuario = {
     mensagem: string;
 };
 
+export type StatusMestre = {
+    cadastrado: boolean;
+};
+
+export type MestreCriar = {
+    usuario: string;
+    senha: string;
+    email: string;
+    numero: string;
+};
+
 export type UsuarioInfo = {
     id: number;
     usuario: string;

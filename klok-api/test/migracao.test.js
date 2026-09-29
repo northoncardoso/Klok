@@ -6,13 +6,11 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { criarBanco, MIGRACOES } from '../db.js';
 
-process.env.SENHA_MESTRE ??= 'senha-mestre-teste';
-
 test('criarBanco aplica migrações e marca a versão atual', () => {
     const banco = criarBanco(':memory:');
 
     assert.equal(banco.userVersion(), MIGRACOES.length);
-    assert.ok(banco.buscarUsuarioPorLogin('mestre'), 'mestre deve ser semeado após migrar');
+    assert.equal(banco.existeMestre(), false, 'nenhum mestre é semeado no boot');
     banco.db.close();
 });
 

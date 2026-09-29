@@ -1,14 +1,14 @@
 import express from 'express';
 import { SignJWT } from 'jose';
 import { OAuth2Client } from 'google-auth-library';
-import { criarAutenticar, criarExigirMestre } from './middlewares.js';
+import { criarAutenticar, criarExigirMestre, criarTratadorDeErros, asyncHandler } from './middlewares.js';
 import { criarRotaAuth } from './rotas/auth.js';
 import { criarRotaFuncionarios } from './rotas/funcionarios.js';
 import { criarRotaPontos } from './rotas/pontos.js';
 import { criarControladoresAuth } from './controladores/auth.js';
 import { criarEnviarEmail } from './email.js';
 
-export function criarApp({ banco, clienteGoogle, enviarEmail }) {
+export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     const segredo = process.env.JWT_SECRET;
     if (!segredo) {
         throw new Error('JWT_SECRET não definido. Configure a variável de ambiente antes de subir a API.');
@@ -39,7 +39,7 @@ export function criarApp({ banco, clienteGoogle, enviarEmail }) {
     }
 
     const limitadorAuth = criarRateLimit({
-        max: 20,
+        max: limiteAuth ?? 20,
         mensagem: 'Muitas tentativas de autenticação. Aguarde alguns minutos e tente de novo.',
     });
 
@@ -57,7 +57,15 @@ export function criarApp({ banco, clienteGoogle, enviarEmail }) {
         enviarEmail ?? criarEnviarEmail();
 
     const app = express();
-    app.use(express.json());
+    app.disable('x-powered-by');
+    app.use(express.json({ limit: '32kb' }));
+    app.use((req, res, next) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.setHeader('Cache-Control', 'no-store');
+        next();
+    });
 
     const deps = {
         banco,
@@ -73,6 +81,12 @@ export function criarApp({ banco, clienteGoogle, enviarEmail }) {
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
     app.get('/redefinir-senha/:token', criarControladoresAuth(deps).paginaRedefinicao);
+
+    app.use('/api', (req, res) => {
+        res.status(404).json({ erro: 'Rota não encontrada' });
+    });
+
+    app.use(criarTratadorDeErros());
 
     return app;
 }

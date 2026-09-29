@@ -12,14 +12,20 @@ import {
 
 import estilos from './estilos';
 import HomeScreen from './screens/HomeScreen';
+import CriarMestreScreen from './screens/CriarMestreScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
 import PontoScreen from './screens/PontoScreen';
 import RedefinirSenhaScreen from './screens/RedefinirSenhaScreen';
 import UsuarioScreen from './screens/UsuarioScreen';
-import { lerSessao, limparSessao, salvarSessao } from './api';
+import { api, lerSessao, limparSessao, mensagemDeErro, salvarSessao } from './api';
 import type { Sessao } from './types';
 
 type Tela = 'Home' | 'Funcionarios' | 'Bater o ponto' | 'Usuario';
+type Portao =
+    | { estado: 'carregando' }
+    | { estado: 'mestre-pendente' }
+    | { estado: 'pronto' }
+    | { estado: 'erro'; mensagem: string };
 
 const LARGURA_MENU = Dimensions.get('window').width * 0.7;
 
@@ -38,9 +44,9 @@ export default function App() {
     const [telaAtual, setTelaAtual] = useState<Tela>('Home');
     const [menuVisivel, setMenuVisivel] = useState(false);
     const [sessao, setSessao] = useState<Sessao | null>(null);
-    const [restaurando, setRestaurando] = useState(true);
     const [modalSairVisivel, setModalSairVisivel] = useState(false);
     const [tokenRedefinir, setTokenRedefinir] = useState<string | null>(null);
+    const [portao, setPortao] = useState<Portao>({ estado: 'carregando' });
 
     const posicaoMenu = useRef(new Animated.Value(-LARGURA_MENU)).current;
     const opacidadeOverlay = useRef(new Animated.Value(0)).current;
@@ -63,9 +69,36 @@ export default function App() {
                 setSessao(s);
                 setTelaAtual('Bater o ponto');
             }
-            setRestaurando(false);
+
+            if (s && s.token && s.tipo === 'mestre') {
+                setPortao({ estado: 'pronto' });
+                return;
+            }
+
+            try {
+                const status = await api.statusMestre();
+                if (!status.cadastrado) {
+                    setPortao({ estado: 'mestre-pendente' });
+                    return;
+                }
+                setPortao({ estado: 'pronto' });
+            } catch (e) {
+                setPortao({ estado: 'erro', mensagem: mensagemDeErro(e) });
+            }
         })();
     }, []);
+
+    const tentarNovamente = async () => {
+        setPortao({ estado: 'carregando' });
+        try {
+            const status = await api.statusMestre();
+            setPortao(
+                status.cadastrado ? { estado: 'pronto' } : { estado: 'mestre-pendente' }
+            );
+        } catch (e) {
+            setPortao({ estado: 'erro', mensagem: mensagemDeErro(e) });
+        }
+    };
 
     const abrirMenu = () => {
         setMenuVisivel(true);
@@ -111,6 +144,12 @@ export default function App() {
         setTelaAtual('Home');
     };
 
+    const entrarComSessao = (dados: Sessao) => {
+        setSessao(dados);
+        setTelaAtual('Bater o ponto');
+        if (dados.tipo === 'mestre') setPortao({ estado: 'pronto' });
+    };
+
     const renderizarTela = () => {
         if (tokenRedefinir) {
             return (
@@ -121,15 +160,12 @@ export default function App() {
             );
         }
 
+        if (portao.estado === 'mestre-pendente' && !sessao) {
+            return <CriarMestreScreen aoEntrar={entrarComSessao} />;
+        }
+
         if (!sessao) {
-            return (
-                <HomeScreen
-                    aoEntrar={(dados) => {
-                        setSessao(dados);
-                        setTelaAtual('Bater o ponto');
-                    }}
-                />
-            );
+            return <HomeScreen aoEntrar={entrarComSessao} />;
         }
 
         switch (telaAtual) {
@@ -157,10 +193,37 @@ export default function App() {
         }
     };
 
-    if (restaurando) {
+    if (portao.estado === 'carregando') {
         return (
             <View style={{ flex: 1, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator size="large" color="#4285F4" />
+            </View>
+        );
+    }
+
+    if (portao.estado === 'erro') {
+        return (
+            <View
+                style={{
+                    flex: 1,
+                    backgroundColor: '#f0f0f0',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 24,
+                }}
+            >
+                <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>
+                    Não foi possível falar com o servidor
+                </Text>
+                <Text style={{ color: 'gray', textAlign: 'center', marginBottom: 20 }}>
+                    {portao.mensagem}
+                </Text>
+                <TouchableOpacity
+                    style={{ backgroundColor: 'dodgerblue', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 }}
+                    onPress={tentarNovamente}
+                >
+                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Tentar novamente</Text>
+                </TouchableOpacity>
             </View>
         );
     }

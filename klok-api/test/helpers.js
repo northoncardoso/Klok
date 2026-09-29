@@ -2,19 +2,33 @@ import { criarBanco } from '../db.js';
 import { criarApp } from '../app.js';
 
 process.env.JWT_SECRET ??= 'segredo-de-teste';
-process.env.SENHA_MESTRE ??= 'senha-mestre-teste';
 
-export const MESTRE_SENHA = process.env.SENHA_MESTRE;
+export const MESTRE = {
+    usuario: 'mestre',
+    senha: 'senha-mestre-teste',
+    email: 'mestre@klok.app',
+    numero: '11999999999',
+};
+
+export const MESTRE_SENHA = MESTRE.senha;
 
 export async function iniciarApp(opcoes = {}) {
     const banco = criarBanco(':memory:');
     const clienteGoogle =
         opcoes.clienteGoogle ??
         { verifyIdToken: async () => { throw new Error('cliente google não configurado'); } };
-    const app = criarApp({ banco, clienteGoogle, enviarEmail: opcoes.enviarEmail });
+    const app = criarApp({
+        banco,
+        clienteGoogle,
+        enviarEmail: opcoes.enviarEmail,
+        limiteAuth: opcoes.limiteAuth,
+    });
     const servidor = app.listen(0);
     await new Promise((resolve) => servidor.once('listening', resolve));
     const baseUrl = `http://127.0.0.1:${servidor.address().port}`;
+
+    if (opcoes.comMestre !== false) await criarMestre(baseUrl);
+
     return {
         banco,
         baseUrl,
@@ -23,6 +37,15 @@ export async function iniciarApp(opcoes = {}) {
             await new Promise((resolve) => servidor.close(resolve));
         },
     };
+}
+
+export async function criarMestre(baseUrl, dados = {}) {
+    const resp = await fetch(`${baseUrl}/api/auth/mestre`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...MESTRE, ...dados }),
+    });
+    return resp.json();
 }
 
 export async function logar(baseUrl, usuario, senha) {

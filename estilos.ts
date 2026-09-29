@@ -248,9 +248,32 @@ import { StyleSheet } from 'react-native';
             fontWeight: 'bold',
         },
         estilosLoginLinkAlternar: {
-        marginTop: 20,
-        color: 'dodgerblue',
-        fontSize: 14,
+            marginTop: 20,
+            color: 'dodgerblue',
+            fontSize: 14,
+        },
+        // Aviso em vermelho da tela de cadastro do mestre
+        estilosMestreAviso: {
+            backgroundColor: '#fde8e8',
+            borderColor: '#dc2626',
+            borderWidth: 1,
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 20,
+            width: '85%',
+        },
+        estilosMestreAvisoTexto: {
+            color: '#b91c1c',
+            fontSize: 13,
+            lineHeight: 19,
+            textAlign: 'center',
+        },
+        estilosMestreBotao: {
+            backgroundColor: '#dc2626',
+            paddingVertical: 14,
+            paddingHorizontal: 40,
+            borderRadius: 8,
+            marginTop: 10,
         },
         // Estilos do menu lateral (App.tsx)
         estilosMenuBarraSuperior: {

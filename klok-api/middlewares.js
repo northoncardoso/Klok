@@ -27,3 +27,32 @@ export function criarExigirMestre() {
         next();
     };
 }
+
+export function asyncHandler(handler) {
+    return function tratar(req, res, next) {
+        Promise.resolve(handler(req, res, next)).catch(next);
+    };
+}
+
+const MENSAGENS_DE_CLIENTE = {
+    400: 'Requisição inválida',
+    413: 'Conteúdo enviado é grande demais',
+    415: 'Formato de conteúdo não suportado',
+};
+
+export function criarTratadorDeErros({ registrar = console.error } = {}) {
+    return function tratarErros(erro, req, res, next) {
+        if (res.headersSent) return next(erro);
+
+        const bruto = Number(erro?.status ?? erro?.statusCode);
+        const status = bruto >= 400 && bruto < 500 ? bruto : 500;
+
+        if (status >= 500) {
+            registrar(`[klok] erro em ${req.method} ${req.originalUrl}:`, erro);
+        }
+
+        res.status(status).json({
+            erro: MENSAGENS_DE_CLIENTE[status] ?? 'Erro interno no servidor',
+        });
+    };
+}
