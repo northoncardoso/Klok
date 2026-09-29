@@ -72,6 +72,14 @@ export const MIGRACOES = [
             ALTER TABLE usuarios ADD COLUMN senhaVersao INTEGER NOT NULL DEFAULT 0;
         `,
     },
+    {
+        versao: 5,
+        nome: 'no máximo um usuário mestre',
+        sql: `
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_mestre
+                ON usuarios(tipo) WHERE tipo = 'mestre';
+        `,
+    },
 ];
 
 export function criarBanco(caminho = 'klok.db') {
@@ -108,6 +116,12 @@ export function criarBanco(caminho = 'klok.db') {
              VALUES (?, ?, ?, NULL, ?, ?, ?)`
         ).run(paraTexto(usuario), criarHashSenha(senha), PAPEL_MESTRE, paraTexto(nome), paraTexto(numero), paraTexto(email));
         return buscarUsuarioPorId(r.lastInsertRowid);
+    }
+
+    function contarMestres() {
+        return Number(
+            db.prepare('SELECT COUNT(*) AS total FROM usuarios WHERE tipo = ?').get(PAPEL_MESTRE).total
+        );
     }
 
     function criarHashSenha(senha) {
@@ -277,6 +291,7 @@ export function criarBanco(caminho = 'klok.db') {
         db,
         userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
         existeMestre,
+        contarMestres,
         criarMestre,
         criarHashSenha,
         verificarSenha,
