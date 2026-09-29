@@ -1,7 +1,12 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { PAPEL_MESTRE } from './constantes.js';
 
 const PREFIXO_HASH = 'scrypt$';
+
+function paraTexto(valor) {
+    return typeof valor === 'string' ? valor : valor === null || valor === undefined ? '' : String(valor);
+}
 
 export const MIGRACOES = [
     {
@@ -86,41 +91,41 @@ export function criarBanco(caminho = 'klok.db') {
 
     aplicarMigracoes();
 
-    function criarUsuarioMestre() {
-        const existe = db.prepare('SELECT id FROM usuarios WHERE usuario = ?').get('mestre');
-        if (existe) return;
-        const senha = process.env.SENHA_MESTRE;
-        if (!senha) {
-            throw new Error('SENHA_MESTRE não definida. Configure a variável de ambiente antes de subir a API.');
-        }
-        db.prepare(
-            'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId) VALUES (?, ?, ?, ?)'
-        ).run('mestre', criarHashSenha(senha), 'mestre', null);
+    function existeMestre() {
+        return !!db.prepare('SELECT id FROM usuarios WHERE tipo = ? LIMIT 1').get(PAPEL_MESTRE);
+    }
+
+    function criarMestre(usuario, senha, nome, email, numero) {
+        const r = db.prepare(
+            `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, nome, numero, email)
+             VALUES (?, ?, ?, NULL, ?, ?, ?)`
+        ).run(paraTexto(usuario), criarHashSenha(senha), PAPEL_MESTRE, paraTexto(nome), paraTexto(numero), paraTexto(email));
+        return buscarUsuarioPorId(r.lastInsertRowid);
     }
 
     function criarHashSenha(senha) {
         const sal = randomBytes(16).toString('hex');
-        const hash = scryptSync(senha, sal, 64).toString('hex');
+        const hash = scryptSync(paraTexto(senha), sal, 64).toString('hex');
         return `${PREFIXO_HASH}${sal}$${hash}`;
     }
 
     function verificarSenha(senha, hashArmazenada) {
-        if (hashArmazenada?.startsWith(PREFIXO_HASH)) {
-            const partes = hashArmazenada.slice(PREFIXO_HASH.length).split('$');
-            if (partes.length !== 2) return false;
-            const [sal, hashEsperado] = partes;
-            const hashGerado = scryptSync(senha, sal, 64);
-            const esperado = Buffer.from(hashEsperado, 'hex');
-            if (hashGerado.length !== esperado.length) return false;
-            return timingSafeEqual(hashGerado, esperado);
+        if (typeof senha !== 'string' || hashArmazenada?.startsWith(PREFIXO_HASH) !== true) {
+            return false;
         }
-        return false;
+        const partes = hashArmazenada.slice(PREFIXO_HASH.length).split('$');
+        if (partes.length !== 2) return false;
+        const [sal, hashEsperado] = partes;
+        const hashGerado = scryptSync(senha, sal, 64);
+        const esperado = Buffer.from(hashEsperado, 'hex');
+        if (hashGerado.length !== esperado.length) return false;
+        return timingSafeEqual(hashGerado, esperado);
     }
 
     function criarFuncionario(nome, numero, email) {
         const r = db.prepare(
             'INSERT INTO funcionarios (nome, numero, email) VALUES (?, ?, ?)'
-        ).run(nome, numero ?? '', email ?? '');
+        ).run(paraTexto(nome), paraTexto(numero), paraTexto(email));
         return r.lastInsertRowid;
     }
 
@@ -135,13 +140,13 @@ export function criarBanco(caminho = 'klok.db') {
     function atualizarFuncionario(id, nome, numero, email) {
         db.prepare(
             'UPDATE funcionarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
-        ).run(nome, numero ?? '', email ?? '', id);
+        ).run(paraTexto(nome), paraTexto(numero), paraTexto(email), id);
     }
 
     function atualizarDadosUsuarios(id, nome, numero, email) {
         db.prepare(
             'UPDATE usuarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
-        ).run(nome ?? '', numero ?? '', email ?? '', id);
+        ).run(paraTexto(nome), paraTexto(numero), paraTexto(email), id);
         return buscarUsuarioPorId(id);
     }
 
@@ -167,12 +172,12 @@ export function criarBanco(caminho = 'klok.db') {
         const funcionarioId = criarFuncionario(nome || usuario, '', '');
         db.prepare(
             'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId) VALUES (?, ?, ?, ?)'
-        ).run(usuario, criarHashSenha(senha), 'funcionario', funcionarioId);
+        ).run(paraTexto(usuario), criarHashSenha(senha), 'funcionario', funcionarioId);
         return buscarUsuarioPorLogin(usuario);
     }
 
     function buscarUsuarioPorLogin(usuario) {
-        return db.prepare('SELECT * FROM usuarios WHERE usuario = ?').get(usuario);
+        return db.prepare('SELECT * FROM usuarios WHERE usuario = ?').get(paraTexto(usuario));
     }
 
     function buscarUsuarioPorEmail(email) {
@@ -180,7 +185,7 @@ export function criarBanco(caminho = 'klok.db') {
             `SELECT u.* FROM usuarios u
              LEFT JOIN funcionarios f ON f.id = u.funcionarioId
              WHERE LOWER(u.email) = ? OR (f.email IS NOT NULL AND LOWER(f.email) = ?)`
-        ).get(email, email);
+        ).get(paraTexto(email), paraTexto(email));
     }
 
     function criarRecuperacao(usuarioId, tokenHash, expiraEm) {
@@ -190,7 +195,7 @@ export function criarBanco(caminho = 'klok.db') {
     }
 
     function buscarRecuperacaoPorToken(tokenHash) {
-        return db.prepare('SELECT * FROM recuperacao_senha WHERE tokenHash = ?').get(tokenHash);
+        return db.prepare('SELECT * FROM recuperacao_senha WHERE tokenHash = ?').get(paraTexto(tokenHash));
     }
 
     function marcarRecuperacaoUsada(usuarioId) {
@@ -198,18 +203,18 @@ export function criarBanco(caminho = 'klok.db') {
     }
 
     function criarOuBuscarUsuarioGoogle(googleId, nome, email) {
-        const existe = db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(googleId);
+        const existe = db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(paraTexto(googleId));
         if (existe) return existe;
 
         const funcionarioId = criarFuncionario(nome, '', email ?? '');
         db.prepare(
             'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, googleId) VALUES (?, ?, ?, ?, ?)'
-        ).run(`google_${googleId}`, null, 'funcionario', funcionarioId, googleId);
+        ).run(`google_${paraTexto(googleId)}`, null, 'funcionario', funcionarioId, paraTexto(googleId));
         return buscarUsuarioPorGoogleId(googleId);
     }
 
     function buscarUsuarioPorGoogleId(googleId) {
-        return db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(googleId);
+        return db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(paraTexto(googleId));
     }
 
     function buscarUsuarioPorId(id) {
@@ -217,6 +222,7 @@ export function criarBanco(caminho = 'klok.db') {
     }
 
     function validarSenha(usuario, senha) {
+        if (typeof senha !== 'string') return null;
         const u = buscarUsuarioPorLogin(usuario);
         if (!u || !u.senhaHash) return null;
         if (u.senhaHash.startsWith(PREFIXO_HASH)) {
@@ -233,7 +239,7 @@ export function criarBanco(caminho = 'klok.db') {
         const dataHora = new Date().toISOString();
         const r = db.prepare(
             'INSERT INTO pontos (funcionarioId, dataHora, tipo) VALUES (?, ?, ?)'
-        ).run(funcionarioId, dataHora, tipo);
+        ).run(paraTexto(funcionarioId), dataHora, paraTexto(tipo));
         return db.prepare('SELECT * FROM pontos WHERE id = ?').get(r.lastInsertRowid);
     }
 
@@ -251,12 +257,11 @@ export function criarBanco(caminho = 'klok.db') {
         ).all();
     }
 
-    criarUsuarioMestre();
-
     return {
         db,
         userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
-        criarUsuarioMestre,
+        existeMestre,
+        criarMestre,
         criarHashSenha,
         verificarSenha,
         criarFuncionario,

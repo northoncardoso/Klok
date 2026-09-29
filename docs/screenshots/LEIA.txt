@@ -1,0 +1,5 @@
+Coloque aqui as capturas de tela do app, formatadas como PNG:
+login, home do mestre, lista de funcionarios e ponto batido.
+Nomeie com prefixo numerado (01_login.png, 02_home_mestre.png ...) para a ordem do README.
+
+Quando os arquivos existirem, eu troco o marcador no README pela lista de imagens.

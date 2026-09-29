@@ -3,6 +3,9 @@
 Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto**.
 
 - Login por **usuário/senha** (local) ou **Entrar com Google** (OAuth2).
+- **Cadastro do mestre no primeiro uso**: na primeira abertura o app pede que
+  você crie o usuário mestre (usuário, senha, email e celular). É ele quem
+  gerencia os funcionários, e só pode ser criado uma vez.
 - Perfil **mestre** controla os funcionários (cadastra, edita, exclui e vê os pontos de todos).
 - Funcionário **bate o ponto** e vê o próprio histórico.
 - Todo dado fica centralizado em um **backend Node.js/Express** com SQLite (nativo do Node, sem dependência extra).
@@ -37,14 +40,19 @@ SQLite (nativo node:sqlite)  →  funcionarios | usuarios | pontos
 
 ```bash
 cd klok-api
-cp .env.example .env      # ajuste o JWT_SECRET se quiser
+cp .env.example .env      # ajuste o JWT_SECRET
 npm install
 npm start                 # sobe na porta 3000
 ```
 
-Na primeira execução é criado o usuário **mestre** com login `mestre` e a senha
-definida em `SENHA_MESTRE` (variável de ambiente do backend). O boot falha se
-`SENHA_MESTRE` ou `JWT_SECRET` não estiverem configurados.
+O boot exige apenas o `JWT_SECRET`. **Nenhuma senha de mestre vem pronta**: o banco
+nasce sem nenhum usuário e o primeiro acesso do app abre a tela de cadastro do
+mestre. O backend só falha no boot se o `JWT_SECRET` não estiver configurado.
+
+> Antes era usada a variável `SENHA_MESTRE`, que semeava um usuário `mestre` com
+> senha conhecida no `.env`. Isso foi removido: agora cada instalação tem a senha
+> que o próprio usuário digitou na primeira tela, e ela nunca passa por arquivo
+> de configuração.
 
 ### 2. App (Expo)
 
@@ -108,6 +116,8 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 
 | Método | Rota | Acesso | Descrição |
 |--------|------|--------|-----------|
+| GET | `/api/auth/mestre` | público | Diz se o mestre já foi cadastrado |
+| POST | `/api/auth/mestre` | público | Cadastra o mestre (só na primeira vez) → JWT |
 | POST | `/api/auth/registrar` | público | Cadastra funcionário local |
 | POST | `/api/auth/login` | público | Login local → JWT |
 | POST | `/api/auth/google` | público | Login Google (envia `idToken`) → JWT |
@@ -133,5 +143,43 @@ Raiz (app):
 `klok-api/.env`:
 - `PORT`
 - `JWT_SECRET` — segredo para assinar os tokens (obrigatório, sem fallback)
-- `SENHA_MESTRE` — senha inicial do usuário mestre (obrigatório no primeiro boot)
+- `NODE_ENV` — deixe vazio em desenvolvimento; use `production` ao publicar
 - `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB` — mesma audience usada para validar o token
+- `URL_BASE` — base pública usada no link de recuperação por email
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_REMETENTE` — envio do email de recuperação
+
+Não existe mais `SENHA_MESTRE`: a senha do mestre é definida por você no app.
+
+### Segurança
+
+A auditoria do backend, com os problemas encontrados, o que foi corrigido e o que
+continua em aberto, está em [`docs/SEGURANCA.md`](docs/SEGURANCA.md). A suíte
+`klok-api/test/ataques.test.js` cobre cada correção, então rodar `npm test` no
+backend verifica que nada regrediu.
+
+Duas coisas obrigatórias antes de expor a API fora da sua rede local:
+
+1. `NODE_ENV=production`. Com isso o link de recuperação de senha deixa de ser
+   devolvido na resposta da API e o boot avisa se faltar SMTP. Sem isso, uma
+   configuração de SMTP esquecida expõe a redefinição de senha de qualquer conta.
+2. HTTPS na frente da API. O token trafega em claro no HTTP puro.
+
+---
+
+## Primeiro acesso: cadastro do mestre
+
+O app consulta `GET /api/auth/mestre` ao abrir. Se responder `cadastrado: false`,
+a primeira tela é o **cadastro do mestre**, com um aviso em vermelho explicando
+que ele precisa ser criado antes de usar o app, que é único e que será reutilizado
+para sempre na gestão de funcionários.
+
+Os campos, nesta ordem:
+
+1. Nome de usuário mestre
+2. Senha
+3. Email
+4. Número de celular
+
+Depois de salvar, o app já entra logado com o perfil de mestre. O `POST
+/api/auth/mestre` responde **409** se o mestre já existir, então ninguém consegue
+sequestrar a conta depois. A senha é guardada com `scrypt` e sal, igual às demais.

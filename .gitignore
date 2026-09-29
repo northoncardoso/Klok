@@ -41,6 +41,7 @@ yarn-error.*
 *.db
 *.db-wal
 *.db-shm
+*.db.bak*
 klok-api/.env
 
 # Instruções pessoais de ambiente (não versionar)

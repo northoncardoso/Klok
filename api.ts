@@ -4,9 +4,11 @@ import * as SecureStore from 'expo-secure-store';
 import type {
     Funcionario,
     FuncionarioCriar,
+    MestreCriar,
     Ponto,
     RegistroUsuario,
     Sessao,
+    StatusMestre,
     UsuarioInfo,
 } from './types';
 
@@ -71,6 +73,9 @@ async function requisicao<T>(caminho: string, metodo = 'GET', corpo: unknown = n
 }
 
 export const api = {
+    statusMestre: (): Promise<StatusMestre> => requisicao<StatusMestre>('/api/auth/mestre', 'GET'),
+    criarMestre: (dados: MestreCriar): Promise<Sessao> =>
+        requisicao<Sessao>('/api/auth/mestre', 'POST', dados),
     login: (usuario: string, senha: string): Promise<Sessao> =>
         requisicao<Sessao>('/api/auth/login', 'POST', { usuario, senha }),
     registrar: (usuario: string, senha: string, nome: string): Promise<RegistroUsuario> =>

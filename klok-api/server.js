@@ -4,6 +4,15 @@ import { criarApp } from './app.js';
 
 dotenv.config();
 
+if (
+    process.env.NODE_ENV === 'production' &&
+    !(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+) {
+    console.warn(
+        '[klok] NODE_ENV=production sem SMTP configurado. A recuperação de senha por email vai falhar em produção.'
+    );
+}
+
 const banco = criarBanco();
 const app = criarApp({ banco });
 
