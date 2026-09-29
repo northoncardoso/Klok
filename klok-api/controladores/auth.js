@@ -15,6 +15,18 @@ function smtpCompleto() {
     return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+// Distingue "já existe mestre" de qualquer outra falha de banco, para não
+// esconder bug real atrás de um 409. O SQLite reporta violação de restrição
+// como SQLITE_CONSTRAINT_UNIQUE (2067) ou SQLITE_CONSTRAINT (19).
+function jaExisteMestre(erro) {
+    const codigo = String(erro?.errcode ?? erro?.code ?? '');
+    return (
+        codigo.includes('2067') ||
+        codigo.includes('CONSTRAINT_UNIQUE') ||
+        (codigo.includes('19') && /usuarios_mestre/i.test(String(erro?.message ?? '')))
+    );
+}
+
 function ehProducao() {
     return process.env.NODE_ENV === 'production';
 }
@@ -63,8 +75,16 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         let criado;
         try {
             criado = banco.criarMestre(usuarioLimpo, senhaLimpa, usuarioLimpo, emailLimpo, numeroLimpo);
-        } catch {
-            return res.status(409).json({ erro: 'Não foi possível cadastrar o mestre' });
+        } catch (erro) {
+            // O índice único parcial em usuarios(tipo) é quem garante a
+            // unicidade de verdade: a checagem acima pode ser corrida por duas
+            // requisições simultâneas, o banco não deixa passar.
+            if (jaExisteMestre(erro)) {
+                return res.status(409).json({
+                    erro: 'O usuário mestre já foi cadastrado. Faça login com ele.',
+                });
+            }
+            throw erro;
         }
 
         const token = await gerarToken(criado);
