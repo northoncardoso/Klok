@@ -601,6 +601,27 @@ test('token sem iat é recusado depois de uma troca de senha', async (t) => {
     assert.equal(r.status, 401, 'sem iat não dá para provar que o token é posterior à troca');
 });
 
+test('login e troca de senha no mesmo segundo não desloga o usuário', async (t) => {
+    const s = await iniciarApp({ limiteAuth: 1000 });
+    t.after(() => s.fechar());
+
+    const antigo = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const troca = await pedido(s.baseUrl, '/api/auth/senha', {
+        metodo: 'PUT',
+        token: antigo,
+        corpo: JSON.stringify({ senhaAtual: MESTRE_SENHA, senhaNova: 'senha-nova-1234' }),
+    });
+    assert.equal(troca.status, 200);
+
+    const novo = await logar(s.baseUrl, MESTRE.usuario, 'senha-nova-1234');
+    assert.ok(novo, 'o token novo precisa ser emitido mesmo no mesmo segundo da troca');
+    const comNovo = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: novo });
+    assert.equal(comNovo.status, 200, 'o token novo precisa funcionar de imediato');
+
+    const comAntigo = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: antigo });
+    assert.equal(comAntigo.status, 401, 'e o antigo precisa cair na mesma janela');
+});
+
 test('criarMestre pela API entrega token utilizável de uma vez', async (t) => {
     const s = await iniciarApp({ comMestre: false, limiteAuth: 1000 });
     t.after(() => s.fechar());
