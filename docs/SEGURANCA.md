@@ -16,14 +16,13 @@ quebra.
 ```bash
 cd klok-api
 npx nvm use 24        # o projeto exige Node 22.5+ (node:sqlite)
-npm test              # 74 testes, 29 deles de ataque
+npm test              # 73 testes, 28 deles de ataque
 ```
 
-Pendências conhecidas, cada uma com issue: [#13](https://github.com/northoncardoso/Klok/issues/13)
-revogação de JWT (corrigida), [#14](https://github.com/northoncardoso/Klok/issues/14)
-rate limit compartilhado, [#15](https://github.com/northoncardoso/Klok/issues/15)
-`nodemailer` 10.x e Helmet, [#16](https://github.com/northoncardoso/Klok/issues/16)
-corrida na criação do mestre.
+Pendências conhecidas, cada uma com issue: [#14](https://github.com/northoncardoso/Klok/issues/14)
+rate limit compartilhado e [#15](https://github.com/northoncardoso/Klok/issues/15)
+`nodemailer` 10.x com Helmet. Já corrigidos: #13 (revogação de JWT) e #16
+(unicidade do mestre garantida no banco).
 
 A auditoria inteira foi feita com a API real em execução e requisições HTTP de
 verdade, por isso as descrições abaixo trazem o `curl` e a resposta observada, e
@@ -31,7 +30,7 @@ não só a leitura do código.
 
 Os testes de segurança vivem em dois arquivos:
 
-- `test/ataques.test.js`: 25 testes de simulação de ataque, que cobrem as correções.
+- `test/ataques.test.js`: 28 testes de simulação de ataque, que cobrem as correções.
 - `test/seguranca.test.js`: 4 testes de garantias de base (hash com sal, variáveis de ambiente).
 
 ---
@@ -51,6 +50,7 @@ Os testes de segurança vivem em dois arquivos:
 | 9 | Política de senha ausente | médio | parcialmente |
 | 10 | Cadastro de funcionário aberto, sem aprovação | médio | em aberto |
 | 11 | Página de redefinição sem limite de requisições | baixo | em aberto |
+| 12 | Unicidade do mestre só garantida na aplicação | baixo | corrigido, com teste |
 
 ---
 
@@ -255,7 +255,32 @@ Não corrigido por ser decisão de produto, não defeito. Mas vale saber que
 ### 11. Página de redefinição sem limite (baixo)
 
 Cinquenta GETs seguidos em tokens inválidos, todos 200, nenhum 429. Como o token
-tem 256 bits, forçar é inviável, mas a rota não passa pelo limitador.
+tem 256 bits, forçar é inviável, mas a rota não passa pelo limitador. Resolvido
+ junto com o achado 5 (issue #14).
+
+### 12. Unicidade do mestre só garantida na aplicação (baixo, corrigido)
+
+`POST /api/auth/mestre` checava `existeMestre()` e depois inseria, e a unicidade
+dependia de o controller continuar síncrono.
+
+Para ser exato sobre o risco: **não era explorável**. `criarMestre` não tem
+`await` entre a checagem e o INSERT, então o event loop do Node serializa as
+requisições. Medi removendo o índice e disparando 4 POSTs simultâneos 200 vezes,
+em nenhuma rodada passou mais de um 201.
+
+Resolvido na issue #16 com um índice único parcial no banco:
+
+```sql
+CREATE UNIQUE INDEX idx_usuarios_mestre ON usuarios(tipo) WHERE tipo = 'mestre';
+```
+
+O índice é parcial de propósito: `UNIQUE` em `tipo` inteiro derrubaria o app,
+porque vários funcionários compartilham `tipo = 'funcionario'`. Isso protege contra
+um `await` introduzido no meio do `if` (refatoração banal que já quebraria a
+garantia) e contra vários processos apontando para o mesmo banco.
+
+O 409 devolvido ao perder a corrida usa a mesma mensagem do 409 por chequeco
+prévio, para não revelar se o primeiro Mestre chegou a logar.
 
 ---
 
