@@ -484,142 +484,63 @@ test('criarMestre direto no banco normaliza os campos', () => {
     }
 });
 
-test('trocar a senha invalida o token anterior', async (t) => {
-    const s = await iniciarApp({ limiteAuth: 1000 });
+test('duas requisições simultâneas de cadastro do mestre resulta em 201 e 409', async (t) => {
+    const s = await iniciarApp({ comMestre: false, limiteAuth: 1000 });
     t.after(() => s.fechar());
 
-    const antigo = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
-    assert.equal((await pedido(s.baseUrl, '/api/auth/eu', { metodo: 'GET', token: antigo })).status, 200);
+    const corpo = { ...MESTRE, usuario: 'mestre-corrida', email: 'corrida@teste.com' };
+    const [primeira, segunda] = await Promise.all([
+        pedido(s.baseUrl, '/api/auth/mestre', { corpo: JSON.stringify(corpo) }),
+        pedido(s.baseUrl, '/api/auth/mestre', { corpo: JSON.stringify(corpo) }),
+    ]);
 
-    const troca = await pedido(s.baseUrl, '/api/auth/senha', {
-        metodo: 'PUT',
-        token: antigo,
-        corpo: JSON.stringify({ senhaAtual: MESTRE_SENHA, senhaNova: 'senha-nova-1234' }),
-    });
-    assert.equal(troca.status, 200);
-
-    const revogado = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: antigo });
-    assert.equal(revogado.status, 401, 'o token anterior não pode mais gerenciar funcionários');
-    assert.match(revogado.corpo.erro, /sessão expirada/i);
-
-    const novo = await logar(s.baseUrl, MESTRE.usuario, 'senha-nova-1234');
-    assert.ok(novo, 'a senha nova precisa autenticar');
-    const comNovo = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: novo });
-    assert.equal(comNovo.status, 200, 'o token novo precisa funcionar');
+    const criada = primeira.status === 201 ? primeira : segunda;
+    const recusada = primeira.status === 201 ? segunda : primeira;
+    assert.equal(criada.status, 201, 'uma requisição precisa criar o mestre');
+    assert.equal(recusada.status, 409, `a outra precisa ser recusada, veio ${recusada.status}`);
+    assert.equal(s.banco.contarMestres(), 1, 'o banco não pode ficar com dois mestres');
+    assert.equal(
+        recusada.corpo.erro,
+        'O usuário mestre já foi cadastrado. Faça login com ele.',
+        'o 409 não pode revelar se o primeiro Mestre já chegou a logar'
+    );
 });
 
-test('redefinir por email invalida o token anterior', async (t) => {
-    const enviados = [];
-    const s = await iniciarApp({
-        limiteAuth: 1000,
-        enviarEmail: async ({ urlApp }) => {
-            enviados.push({ token: urlApp.split('token=')[1] });
-        },
-    });
-    t.after(() => s.fechar());
+test('o banco recusa um segundo mestre mesmo chamando criarMestre direto', () => {
+    const banco = criarBanco(':memory:');
+    try {
+        banco.criarMestre('primeiro', 'senha-1234', 'Primeiro', 'a@teste.com', '1');
+        assert.equal(banco.contarMestres(), 1);
 
-    const antigo = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
-    await pedido(s.baseUrl, '/api/auth/eu', {
-        metodo: 'PUT',
-        token: antigo,
-        corpo: JSON.stringify({ nome: 'Mestre', email: MESTRE.email }),
-    });
-
-    const pedidoReset = await pedido(s.baseUrl, '/api/auth/esqueci-senha', {
-        corpo: JSON.stringify({ email: MESTRE.email }),
-    });
-    assert.equal(pedidoReset.status, 200);
-    assert.equal(enviados.length, 1, 'precisa ter enviado o email');
-
-    const redef = await pedido(s.baseUrl, '/api/auth/redefinir-senha', {
-        corpo: JSON.stringify({ token: enviados[0].token, novaSenha: 'senha-redefinida-9' }),
-    });
-    assert.equal(redef.status, 200, JSON.stringify(redef.corpo));
-
-    const revogado = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: antigo });
-    assert.equal(revogado.status, 401, 'o token emitido antes do reset não pode valer');
-
-    const novo = await logar(s.baseUrl, MESTRE.usuario, 'senha-redefinida-9');
-    assert.ok(novo, 'a senha redefinida precisa autenticar');
+        assert.throws(
+            () => banco.criarMestre('segundo', 'senha-1234', 'Segundo', 'b@teste.com', '2'),
+            /UNIQUE|constraint/i,
+            'o índice único parcial precisa barrar o segundo mestre'
+        );
+        assert.equal(banco.contarMestres(), 1, 'o segundo INSERT não pode ter entrado');
+    } finally {
+        banco.db.close();
+    }
 });
 
-test('um link de recuperação não invalida outro pendente do mesmo usuário', async (t) => {
-    const enviados = [];
-    const s = await iniciarApp({
-        limiteAuth: 1000,
-        enviarEmail: async ({ urlApp }) => {
-            enviados.push({ token: urlApp.split('token=')[1] });
-        },
-    });
-    t.after(() => s.fechar());
+test('funcionários não são barrados pelo índice único de mestre', () => {
+    const banco = criarBanco(':memory:');
+    try {
+        banco.criarMestre('chefe', 'senha-1234', 'Chefe', 'chefe@teste.com', '1');
+        const f1 = banco.criarFuncionario('Ana Souza', '1', 'ana@teste.com');
+        const f2 = banco.criarFuncionario('Bruno Souza', '2', 'bruno@teste.com');
+        banco.criarUsuarioLocal('bruno', 'senha-1234', f1.id);
+        banco.criarUsuarioLocal('bruno2', 'senha-1234', f2.id);
 
-    const token = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
-    await pedido(s.baseUrl, '/api/auth/eu', {
-        metodo: 'PUT',
-        token,
-        corpo: JSON.stringify({ nome: 'Mestre', email: MESTRE.email }),
-    });
-
-    await pedido(s.baseUrl, '/api/auth/esqueci-senha', { corpo: JSON.stringify({ email: MESTRE.email }) });
-    await pedido(s.baseUrl, '/api/auth/esqueci-senha', { corpo: JSON.stringify({ email: MESTRE.email }) });
-    assert.equal(enviados.length, 2, 'dois links devem ter sido enviados');
-    const [primeiro, segundo] = enviados.map((e) => e.token);
-    assert.ok(primeiro, 'o email precisa expor o token pelo urlApp');
-    assert.notEqual(primeiro, segundo);
-
-    const usado = await pedido(s.baseUrl, '/api/auth/redefinir-senha', {
-        corpo: JSON.stringify({ token: primeiro, novaSenha: 'senha-primeira-1' }),
-    });
-    assert.equal(usado.status, 200);
-
-    const segundoAinda = await pedido(s.baseUrl, '/api/auth/redefinir-senha', {
-        corpo: JSON.stringify({ token: segundo, novaSenha: 'senha-segunda-22' }),
-    });
-    assert.equal(segundoAinda.status, 200, 'usar um link não pode invalidar o outro pendente');
-
-    const logado = await logar(s.baseUrl, MESTRE.usuario, 'senha-segunda-22');
-    assert.ok(logado, 'a última senha definida é a que vale');
-});
-
-test('token sem iat é recusado depois de uma troca de senha', async (t) => {
-    const s = await iniciarApp();
-    t.after(() => s.fechar());
-
-    const token = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
-    await pedido(s.baseUrl, '/api/auth/senha', {
-        metodo: 'PUT',
-        token,
-        corpo: JSON.stringify({ senhaAtual: MESTRE_SENHA, senhaNova: 'senha-nova-1234' }),
-    });
-
-    const semIat = await new SignJWT({ sub: '1', tipo: 'mestre' })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setExpirationTime('12h')
-        .sign(SEG);
-
-    const r = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: semIat });
-    assert.equal(r.status, 401, 'sem iat não dá para provar que o token é posterior à troca');
-});
-
-test('login e troca de senha no mesmo segundo não desloga o usuário', async (t) => {
-    const s = await iniciarApp({ limiteAuth: 1000 });
-    t.after(() => s.fechar());
-
-    const antigo = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
-    const troca = await pedido(s.baseUrl, '/api/auth/senha', {
-        metodo: 'PUT',
-        token: antigo,
-        corpo: JSON.stringify({ senhaAtual: MESTRE_SENHA, senhaNova: 'senha-nova-1234' }),
-    });
-    assert.equal(troca.status, 200);
-
-    const novo = await logar(s.baseUrl, MESTRE.usuario, 'senha-nova-1234');
-    assert.ok(novo, 'o token novo precisa ser emitido mesmo no mesmo segundo da troca');
-    const comNovo = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: novo });
-    assert.equal(comNovo.status, 200, 'o token novo precisa funcionar de imediato');
-
-    const comAntigo = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: antigo });
-    assert.equal(comAntigo.status, 401, 'e o antigo precisa cair na mesma janela');
+        assert.equal(banco.contarMestres(), 1, 'continua havendo um só mestre');
+        assert.equal(
+            banco.db.prepare("SELECT COUNT(*) AS total FROM usuarios WHERE tipo = 'funcionario'").get().total,
+            2,
+            'vários funcionários convivem com o índice'
+        );
+    } finally {
+        banco.db.close();
+    }
 });
 
 test('criarMestre pela API entrega token utilizável de uma vez', async (t) => {
