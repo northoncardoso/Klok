@@ -16,8 +16,14 @@ quebra.
 ```bash
 cd klok-api
 npx nvm use 24        # o projeto exige Node 22.5+ (node:sqlite)
-npm test              # 68 testes, 25 deles de ataque
+npm test              # 74 testes, 29 deles de ataque
 ```
+
+Pendências conhecidas, cada uma com issue: [#13](https://github.com/northoncardoso/Klok/issues/13)
+revogação de JWT (corrigida), [#14](https://github.com/northoncardoso/Klok/issues/14)
+rate limit compartilhado, [#15](https://github.com/northoncardoso/Klok/issues/15)
+`nodemailer` 10.x e Helmet, [#16](https://github.com/northoncardoso/Klok/issues/16)
+corrida na criação do mestre.
 
 A auditoria inteira foi feita com a API real em execução e requisições HTTP de
 verdade, por isso as descrições abaixo trazem o `curl` e a resposta observada, e
@@ -39,7 +45,7 @@ Os testes de segurança vivem em dois arquivos:
 | 3 | Injeção de cabeçalho de email (CRLF) | alto | corrigido, com teste |
 | 4 | Fallback de desenvolvimento virava oráculo de senha | alto | corrigido, com teste |
 | 5 | Rate limit compartilhado permite travar o login legítimo | médio | em aberto |
-| 6 | Token JWT de 12h não é invalidado ao trocar a senha | médio | em aberto |
+| 6 | Token JWT de 12h não é invalidado ao trocar a senha | médio | corrigido, com teste |
 | 7 | Token de redefinição viaja na URL | médio | parcialmente |
 | 8 | API sem TLS e sem headers de segurança | médio | parcialmente |
 | 9 | Política de senha ausente | médio | parcialmente |
@@ -169,9 +175,9 @@ o processo zera tudo, e `GET /redefinir-senha/:token` não passa por ele.
 Fica para uma rodada própria: separar o balde por endpoint e por usuário, e
 definir a resposta para rate limit no app.
 
-### 6. JWT sem revogação (médio)
+### 6. JWT sem revogação (médio, corrigido)
 
-O token vive 12 horas, sem `jti` e sem refresh token, então não há como
+O token vivia 12 horas, sem `jti` e sem refresh token, então não havia como
 revogá-lo. Reproduzido nos dois caminhos de troca de senha:
 
 ```bash
@@ -187,10 +193,20 @@ O mesmo acontece depois de redefinir pelo email: o token emitido antes do reset
 continua valendo. O app desloga localmente, mas o token segue vivo no servidor, e
 quem o copiou continua com acesso de mestre.
 
-Para um app que guarda folha de pagamento, a sessão antiga sobreviver à troca de
-senha precisa ser resolvida. Caminhos possíveis: guardar `senhaAlteradaEm` no
-usuário e recusar token emitido antes disso, ou uma lista de revogação por `jti`.
-A primeira opção é mais simples e não exige estado extra.
+Resolvido na issue #13. A coluna `usuarios.senhaVersao` conta as trocas de senha, o
+valor viaja no token como `v`, e o `autenticar` recusa token cujo `v` não bate
+com a versão atual. Trocar ou redefinir a senha passa a derrubar as sessões
+anteriores, inclusive o acesso de mestre.
+
+Um contador de versão foi escolhido no lugar de carimbo de tempo depois que a
+primeira implementação falhou num teste: com `senhaAlteradaEm` em segundos, o
+token emitido no mesmo segundo da troca era indistinguível do antigo, e a regra
+restritiva deslogava o usuário imediatamente. Contador não tem granularidade.
+
+Correção extra no mesmo caminho: `marcarRecuperacaoUsada` recebia o **id do
+usuário** em vez do **id do registro**, então usar um link de recuperação invalidava
+todos os links pendentes daquele usuário de uma vez. Passou a ser por registro,
+o que é o que "token de uso único" significa.
 
 ### 7. Token de redefinição na URL (médio, parcialmente resolvido)
 

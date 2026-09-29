@@ -263,7 +263,7 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
             return res.status(400).json({ erro: 'Link expirado. Solicite um novo.' });
         }
         banco.atualizarSenha(registro.usuarioId, banco.criarHashSenha(novaSenha));
-        banco.marcarRecuperacaoUsada(registro.usuarioId);
+        banco.marcarRecuperacaoUsada(registro.id);
         res.json({ sucesso: true, mensagem: 'Senha redefinida com sucesso. Faça login com a nova senha.' });
     }
 

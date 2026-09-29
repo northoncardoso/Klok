@@ -65,6 +65,13 @@ export const MIGRACOES = [
             CREATE INDEX IF NOT EXISTS idx_recuperacao_token ON recuperacao_senha(tokenHash);
         `,
     },
+    {
+        versao: 4,
+        nome: 'versão da senha para revogar tokens antigos',
+        sql: `
+            ALTER TABLE usuarios ADD COLUMN senhaVersao INTEGER NOT NULL DEFAULT 0;
+        `,
+    },
 ];
 
 export function criarBanco(caminho = 'klok.db') {
@@ -151,7 +158,13 @@ export function criarBanco(caminho = 'klok.db') {
     }
 
     function atualizarSenha(id, hashSenha) {
-        db.prepare('UPDATE usuarios SET senhaHash = ? WHERE id = ?').run(hashSenha, id);
+        // Incrementar a versão invalida os tokens emitidos antes da troca. Um
+        // contador foi escolhido no lugar de carimbo de tempo porque o iat do
+        // JWT tem granularidade de segundo, e o token emitido no mesmo segundo
+        // da troca não é distinguível do antigo.
+        db.prepare(
+            'UPDATE usuarios SET senhaHash = ?, senhaVersao = senhaVersao + 1 WHERE id = ?'
+        ).run(hashSenha, id);
     }
 
     function apagarFuncionario(id) {
@@ -198,8 +211,11 @@ export function criarBanco(caminho = 'klok.db') {
         return db.prepare('SELECT * FROM recuperacao_senha WHERE tokenHash = ?').get(paraTexto(tokenHash));
     }
 
-    function marcarRecuperacaoUsada(usuarioId) {
-        db.prepare('UPDATE recuperacao_senha SET usado = 1 WHERE usuarioId = ?').run(usuarioId);
+    // Recebe o id do registro, não o do usuário: o token de uso único deve ser
+    // invalidado sozinho. Marcar por usuário invalidaria de uma vez todos os
+    // links pendentes daquele usuário.
+    function marcarRecuperacaoUsada(registroId) {
+        db.prepare('UPDATE recuperacao_senha SET usado = 1 WHERE id = ?').run(registroId);
     }
 
     function criarOuBuscarUsuarioGoogle(googleId, nome, email) {
