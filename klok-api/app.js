@@ -16,32 +16,57 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     const SECRETO = new TextEncoder().encode(segredo);
     const googleClient = clienteGoogle ?? new OAuth2Client(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB);
 
-    function criarRateLimit({ janelaMs = 15 * 60 * 1000, max = 20, mensagem }) {
-        const porIp = new Map();
+    // Cada rota tem o próprio balde. Assim um cadastro em excesso não tranca o
+    // login, e uma tentativa de força bruta não gasta a cota de outra rota.
+    function criarLimitador({ janelaMs = 15 * 60 * 1000, max = 20, mensagem, chave = (req) => req.ip }) {
+        const registros = new Map();
         return (req, res, next) => {
             const agora = Date.now();
-            const registro = porIp.get(req.ip);
+            const identificador = chave(req);
+            let registro = registros.get(identificador);
             if (!registro || agora > registro.ate) {
-                porIp.set(req.ip, { cont: 1, ate: agora + janelaMs });
-                if (porIp.size >= 10000) {
-                    for (const [chave, valor] of porIp) {
-                        if (agora > valor.ate) porIp.delete(chave);
+                registro = { cont: 1, ate: agora + janelaMs };
+                registros.set(identificador, registro);
+                if (registros.size >= 10000) {
+                    for (const [chaveAntiga, valor] of registros) {
+                        if (agora > valor.ate) registros.delete(chaveAntiga);
                     }
                 }
                 return next();
             }
-            if (registro.cont > max) {
-                return res.status(429).json({ erro: mensagem });
+            if (registro.cont >= max) {
+                const faltam = Math.max(1, Math.ceil((registro.ate - agora) / 1000));
+                res.setHeader('Retry-After', String(faltam));
+                return res.status(429).json({
+                    erro: mensagem,
+                    tentarEmSegundos: faltam,
+                });
             }
             registro.cont += 1;
             next();
         };
     }
 
-    const limitadorAuth = criarRateLimit({
-        max: limiteAuth ?? 20,
-        mensagem: 'Muitas tentativas de autenticação. Aguarde alguns minutos e tente de novo.',
-    });
+    function chaveLogin(req) {
+        const usuario =
+            req.body && typeof req.body.usuario === 'string' ? req.body.usuario.trim().toLowerCase() : '';
+        return `${req.ip}|${usuario}`;
+    }
+
+    const MENSAGEM_LOGIN = 'Muitas tentativas de login. Aguarde alguns minutos e tente de novo.';
+    const MENSAGEM_CADASTRO = 'Muitos cadastros deste endereço. Aguarde um pouco e tente de novo.';
+    const MENSAGEM_GENERICA = 'Muitas requisições. Aguarde alguns minutos e tente de novo.';
+
+    const limitadores = {
+        login: criarLimitador({ max: limiteAuth ?? 10, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN, chave: chaveLogin }),
+        loginIp: criarLimitador({ max: 60, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN }),
+        registrar: criarLimitador({ max: 10, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_CADASTRO }),
+        mestre: criarLimitador({ max: 10, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_CADASTRO }),
+        google: criarLimitador({ max: 20, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
+        esqueci: criarLimitador({ max: 5, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
+        redefinir: criarLimitador({ max: 20, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
+        paginaRedefinicao: criarLimitador({ max: 30, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
+    };
 
     async function gerarToken(usuario) {
         // A versão da senha viaja no token para que a troca de senha possa
@@ -77,7 +102,7 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
         banco,
         googleClient,
         gerarToken,
-        limitadorAuth,
+        limitadores,
         autenticar,
         exigirMestre,
         enviarEmail: enviarEmailFinal,
@@ -86,7 +111,11 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     app.use('/api/auth', criarRotaAuth(deps));
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
-    app.get('/redefinir-senha/:token', criarControladoresAuth(deps).paginaRedefinicao);
+    app.get(
+        '/redefinir-senha/:token',
+        limitadores.paginaRedefinicao,
+        criarControladoresAuth(deps).paginaRedefinicao
+    );
 
     app.use('/api', (req, res) => {
         res.status(404).json({ erro: 'Rota não encontrada' });
