@@ -165,6 +165,37 @@ test('a API não anuncia a tecnologia e envia headers de proteção', async (t) 
     assert.equal(resp.headers.get('cache-control'), 'no-store');
 });
 
+test('a API envia Content-Security-Policy alem dos outros headers', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`);
+    const csp = resp.headers.get('content-security-policy');
+    assert.ok(csp && csp.includes("default-src 'self'"), `precisa vir CSP, veio: ${csp}`);
+});
+
+test('a pagina de redefinicao abre o app por link, sem script inline', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
+    t.after(() => s.fechar());
+
+    const recuperacao = await pedido(s.baseUrl, '/api/auth/esqueci-senha', {
+        corpo: JSON.stringify({ email: MESTRE.email }),
+    });
+    const linkPagina = recuperacao.corpo.linkPagina;
+    assert.ok(linkPagina, 'o ambiente de teste devolve o link da pagina');
+
+    const resp = await fetch(`${s.baseUrl}${new URL(linkPagina).pathname}`);
+    const texto = await resp.text();
+
+    assert.equal(resp.status, 200);
+    assert.ok(
+        texto.includes('href="klok://redefinir-senha?token='),
+        'o botao precisa ser um link klok://'
+    );
+    assert.ok(texto.includes('Abrir o app Klok'));
+    assert.ok(!texto.includes('onclick'), 'a pagina nao pode depender de script inline');
+});
+
 test('rota de API inexistente devolve JSON em vez de HTML do Express', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());

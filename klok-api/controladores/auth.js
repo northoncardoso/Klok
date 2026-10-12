@@ -248,7 +248,7 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         const valido =
             !!registro && !registro.usado && new Date(registro.expiraEm).getTime() >= Date.now();
 
-        const estilo = '<style>body{font-family:Arial,sans-serif;background:#f4f6f8;margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh}main{background:#fff;max-width:420px;width:90%;padding:28px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);text-align:center}h1{font-size:22px;color:#1f2937;margin:0 0 12px}p{color:#4b5563;line-height:1.5}button{background:#dc2626;color:#fff;border:0;border-radius:8px;padding:14px 20px;font-size:16px;font-weight:bold;cursor:pointer;margin-top:8px}.dica{font-size:13px;color:#9ca3af;margin-top:16px}</style>';
+        const estilo = '<style>body{font-family:Arial,sans-serif;background:#f4f6f8;margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh}main{background:#fff;max-width:420px;width:90%;padding:28px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);text-align:center}h1{font-size:22px;color:#1f2937;margin:0 0 12px}p{color:#4b5563;line-height:1.5}a.botao{display:inline-block;background:#dc2626;color:#fff;border-radius:8px;padding:14px 20px;font-size:16px;font-weight:bold;text-decoration:none;cursor:pointer;margin-top:8px}.dica{font-size:13px;color:#9ca3af;margin-top:16px}</style>';
 
         res.type('html');
         if (!valido) {
@@ -261,7 +261,7 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         }
         const tokenSeguro = escaparHtml(token);
         return res.send(
-            `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Redefinir senha no Klok</title>${estilo}</head><body><main><h1>Redefinir sua senha Klok</h1><p>Confirmamos que é você. Toque no botão para abrir o app Klok e definir a nova senha.</p><button onclick="window.location.href='klok://redefinir-senha?token=${tokenSeguro}'">Abrir o app Klok</button><p class="dica">Se nada acontecer, confirme que o app Klok está instalado e toque no link novamente.</p></main></body></html>`
+            `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Redefinir senha no Klok</title>${estilo}</head><body><main><h1>Redefinir sua senha Klok</h1><p>Confirmamos que é você. Toque no botão para abrir o app Klok e definir a nova senha.</p><a class="botao" href="klok://redefinir-senha?token=${tokenSeguro}">Abrir o app Klok</a><p class="dica">Se nada acontecer, confirme que o app Klok está instalado e toque no link novamente.</p></main></body></html>`
         );
     }
 

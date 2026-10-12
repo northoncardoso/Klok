@@ -1,4 +1,5 @@
 import express from 'express';
+import helmet from 'helmet';
 import { SignJWT } from 'jose';
 import { OAuth2Client } from 'google-auth-library';
 import { criarAutenticar, criarExigirMestre, criarTratadorDeErros, asyncHandler } from './middlewares.js';
@@ -87,13 +88,20 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     const enviarEmailFinal =
         enviarEmail ?? criarEnviarEmail();
 
+    const ehProducao = () => process.env.NODE_ENV === 'production';
+
     const app = express();
     app.disable('x-powered-by');
+    // O helmet cobre os headers de seguranca e a CSP. O HSTS fica so em producao,
+    // porque em desenvolvimento a API roda em HTTP e o header nao faz sentido.
+    app.use(
+        helmet({
+            frameguard: { action: 'deny' },
+            hsts: ehProducao() ? undefined : false,
+        })
+    );
     app.use(express.json({ limit: '32kb' }));
     app.use((req, res, next) => {
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('X-Frame-Options', 'DENY');
-        res.setHeader('Referrer-Policy', 'no-referrer');
         res.setHeader('Cache-Control', 'no-store');
         next();
     });
