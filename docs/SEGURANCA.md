@@ -19,9 +19,9 @@ mise use node@22      # o projeto exige Node 22.5+ (node:sqlite)
 npm test              # 77 testes, 32 deles de ataque
 ```
 
-Pendência conhecida, com issue: [#15](https://github.com/northoncardoso/Klok/issues/15)
-`nodemailer` 10.x com Helmet. Já corrigidos: #13 (revogação de JWT), #14 (rate
-limit por endpoint) e #16 (unicidade do mestre garantida no banco).
+Sem pendência de segurança conhecida no backend. Os achados da auditoria foram
+todos corrigidos: #13 (revogação de JWT), #14 (rate limit por endpoint), #15
+(`nodemailer` 10.x com Helmet) e #16 (unicidade do mestre garantida no banco).
 
 A auditoria inteira foi feita com a API real em execução e requisições HTTP de
 verdade, por isso as descrições abaixo trazem o `curl` e a resposta observada, e
@@ -232,11 +232,18 @@ formulário POST com o token no corpo, ou um código curto de uso único.
 A API escuta em `0.0.0.0` por HTTP puro, então o JWT trafega em claro na rede,
 e o README desenha HTTPS que não existe no código.
 
-Resolvido agora: `X-Powered-By` removido, e a API envia `X-Content-Type-Options`,
-`X-Frame-Options`, `Referrer-Policy` e `Cache-Control: no-store`. `helmet` não foi
-adicionado para não puxar dependência nova neste momento.
+Resolvido agora: `X-Powered-By` removido, e os headers de segurança passaram a
+vir do `helmet`, com CSP (`default-src 'self'`, `frame-ancestors 'self'`),
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e
+`Referrer-Policy: no-referrer`. O HSTS fica ligado somente em produção, porque
+em desenvolvimento a API roda em HTTP. O `Cache-Control: no-store` continua
+sendo aplicado à mão, porque o helmet não cobre cache.
 
-Falta: terminar o TLS na frente da API e avaliar `helmet` com CSP.
+A CSP obrigou a tirar o `onclick` inline da página de redefinição: o botão virou
+um link `<a href="klok://...">`. Assim a página funciona sem script nenhum.
+
+Falta: terminar o TLS na frente da API. O HSTS só tem efeito depois que existir
+HTTPS de verdade.
 
 ### 9. Política de senha (médio, parcialmente resolvido)
 
@@ -293,16 +300,26 @@ prévio, para não revelar se o primeiro Mestre chegou a logar.
 
 ## Dependências
 
-`npm audit` no backend em 2026-09-28, com Node 24.18.0: 1 alta e 5 moderadas.
+`npm audit` no backend em 2026-10-12, com Node 22.23.3: nenhuma alta, nenhuma
+crítica e 2 moderadas. A auditoria anterior, de 2026-09-28, tinha 1 alta e 5
+moderadas.
 
-| Pacote | Versão atual | Gravidade | Versão vulnerável | Correção |
-|--------|--------------|-----------|-------------------|----------|
-| `nodemailer` | 6.10.1 | **alta** | `<= 10.0.1` | 10.0.12 (major) |
-| `body-parser` | via express | moderada | 1.20.5 a 1.20.6 | sem breaking |
-| `express` | 4.22.2 | moderada | 4.22.2 | sem breaking |
-| `qs` | via express | moderada | 2.2.5 a 6.15.3 | sem breaking |
-| `gaxios` | via google-auth-library | moderada | 6.4.0 a 6.7.1 | sem breaking |
-| `uuid` | via gaxios | moderada | `< 11.1.1` | sem breaking |
+A alta era o `nodemailer`, resolvida com o major para a linha 10.x. Um crítico do
+`proxy-addr` (transitivo do express) e um moderado do `qs` apareceram na
+atualização da base de avisos e foram resolvidos com `npm audit fix`, sem
+breaking.
+
+| Pacote | Versão | Gravidade | Situação |
+|--------|--------|-----------|----------|
+| `nodemailer` | 6.10.1 para 10.1.0 | alta | resolvida, major |
+| `proxy-addr` | via express | crítica | resolvida, sem breaking |
+| `qs` | via express | moderada | resolvida, sem breaking |
+| `uuid` | via `gaxios` | moderada | em aberto, exige major |
+| `gaxios` | via google-auth-library | moderada | depende do `uuid` |
+
+As 2 moderadas restantes vêm do `uuid` dentro do `gaxios`, que vem do
+`google-auth-library`. Resolver exige um major do `google-auth-library`, fora do
+escopo desta rodada, e precisa ser exercitado com login Google de verdade.
 
 Sobre o `nodemailer`, o aviso alto tem 13 advisories no range `<= 10.0.1`, e três
 merecem atenção neste projeto:
