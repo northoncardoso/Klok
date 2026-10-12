@@ -15,14 +15,13 @@ quebra.
 
 ```bash
 cd klok-api
-npx nvm use 24        # o projeto exige Node 22.5+ (node:sqlite)
-npm test              # 73 testes, 28 deles de ataque
+mise use node@22      # o projeto exige Node 22.5+ (node:sqlite)
+npm test              # 77 testes, 32 deles de ataque
 ```
 
-Pendências conhecidas, cada uma com issue: [#14](https://github.com/northoncardoso/Klok/issues/14)
-rate limit compartilhado e [#15](https://github.com/northoncardoso/Klok/issues/15)
-`nodemailer` 10.x com Helmet. Já corrigidos: #13 (revogação de JWT) e #16
-(unicidade do mestre garantida no banco).
+Pendência conhecida, com issue: [#15](https://github.com/northoncardoso/Klok/issues/15)
+`nodemailer` 10.x com Helmet. Já corrigidos: #13 (revogação de JWT), #14 (rate
+limit por endpoint) e #16 (unicidade do mestre garantida no banco).
 
 A auditoria inteira foi feita com a API real em execução e requisições HTTP de
 verdade, por isso as descrições abaixo trazem o `curl` e a resposta observada, e
@@ -30,7 +29,7 @@ não só a leitura do código.
 
 Os testes de segurança vivem em dois arquivos:
 
-- `test/ataques.test.js`: 28 testes de simulação de ataque, que cobrem as correções.
+- `test/ataques.test.js`: 32 testes de simulação de ataque, que cobrem as correções.
 - `test/seguranca.test.js`: 4 testes de garantias de base (hash com sal, variáveis de ambiente).
 
 ---
@@ -43,13 +42,13 @@ Os testes de segurança vivem em dois arquivos:
 | 2 | Vazamento de stack trace e caminho do servidor | alto | corrigido, com teste |
 | 3 | Injeção de cabeçalho de email (CRLF) | alto | corrigido, com teste |
 | 4 | Fallback de desenvolvimento virava oráculo de senha | alto | corrigido, com teste |
-| 5 | Rate limit compartilhado permite travar o login legítimo | médio | em aberto |
+| 5 | Rate limit compartilhado permite travar o login legítimo | médio | corrigido, com teste |
 | 6 | Token JWT de 12h não é invalidado ao trocar a senha | médio | corrigido, com teste |
 | 7 | Token de redefinição viaja na URL | médio | parcialmente |
 | 8 | API sem TLS e sem headers de segurança | médio | parcialmente |
 | 9 | Política de senha ausente | médio | parcialmente |
 | 10 | Cadastro de funcionário aberto, sem aprovação | médio | em aberto |
-| 11 | Página de redefinição sem limite de requisições | baixo | em aberto |
+| 11 | Página de redefinição sem limite de requisições | baixo | corrigido, com teste |
 | 12 | Unicidade do mestre só garantida na aplicação | baixo | corrigido, com teste |
 
 ---
@@ -156,11 +155,11 @@ avisa no boot se faltar SMTP.
 
 ## Em aberto
 
-### 5. Rate limit compartilhado (médio)
+### 5. Rate limit compartilhado (médio, corrigido)
 
-Um único `limitadorAuth` atende os cinco endpoints de autenticação e o contador
-é por IP. Vinte e duas requisições de registro travam o login legítimo do mestre,
-reproduzido com o limitador padrão:
+Um único `limitadorAuth` atendia os cinco endpoints de autenticação e o contador
+era por IP. Vinte e duas requisições de registro travavam o login legítimo do
+mestre, reproduzido com o limitador antigo:
 
 ```
 POST /api/auth/registrar x24 -> 201 ate a 21a, 429 a partir da 22a
@@ -168,12 +167,20 @@ POST /api/auth/mestre       -> 201
 POST /api/auth/login        -> 429  (o mestre nem consegue entrar)
 ```
 
-Torna-se um ataque de lockout em rede compartilhada, e no emulador Android todos
-os clientes são o mesmo IP. Além disso o limite vive em memória, então reiniciar
-o processo zera tudo, e `GET /redefinir-senha/:token` não passa por ele.
+Agora cada rota tem o próprio balde, com janela e teto próprios. O login tem dois
+níveis: um por IP (rede compartilhada) e um por IP mais usuário, então atacar uma
+conta não consome a cota das outras. Quando o limite estoura, a resposta é 429 com
+o cabeçalho `Retry-After` e o campo `tentarEmSegundos`, para o app dizer quanto
+tempo esperar. A página `GET /redefinir-senha/:token`, que antes não passava por
+limitador nenhum, também entrou.
 
-Fica para uma rodada própria: separar o balde por endpoint e por usuário, e
-definir a resposta para rate limit no app.
+O limite continua vivendo em memória, então reiniciar o processo zera os baldes.
+Isso é aceitável enquanto houver uma única instância; com mais de uma, o próximo
+passo é um armazenamento compartilhado (Redis ou a própria tabela do banco).
+
+Testes de regressão: cadastro em excesso não trava o login do mestre, login em
+excesso devolve 429 com `Retry-After`, a página de redefinição é limitada por IP e
+`esqueci-senha` tem teto de envios.
 
 ### 6. JWT sem revogação (médio, corrigido)
 
@@ -252,7 +259,7 @@ checar `email_verified` nem domínio.
 Não corrigido por ser decisão de produto, não defeito. Mas vale saber que
 "criei uma conta e entrei no app" é o estado atual.
 
-### 11. Página de redefinição sem limite (baixo)
+### 11. Página de redefinição sem limite (baixo, corrigido)
 
 Cinquenta GETs seguidos em tokens inválidos, todos 200, nenhum 429. Como o token
 tem 256 bits, forçar é inviável, mas a rota não passa pelo limitador. Resolvido
