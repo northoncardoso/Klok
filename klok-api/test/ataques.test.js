@@ -472,6 +472,76 @@ test('rate limit bloqueia depois de muitas tentativas', async (t) => {
     assert.equal(vivo.status, 200, 'rotas não limitadas continuam funcionando');
 });
 
+test('registros em excesso não travam o login do mestre', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    const status = [];
+    for (let i = 0; i < 22; i += 1) {
+        const r = await pedido(s.baseUrl, '/api/auth/registrar', {
+            corpo: JSON.stringify({ usuario: `func-${i}`, senha: 'senha-1234' }),
+        });
+        status.push(r.status);
+    }
+    assert.ok(status.includes(429), 'o cadastro precisa ter o próprio limite');
+
+    const login = await pedido(s.baseUrl, '/api/auth/login', {
+        corpo: JSON.stringify({ usuario: MESTRE.usuario, senha: MESTRE_SENHA }),
+    });
+    assert.equal(login.status, 200, 'o login não pode ser barrado pelo cadastro em excesso');
+});
+
+test('login em excesso devolve 429 com Retry-After e tempo de espera', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    let ultima;
+    for (let i = 0; i < 15; i += 1) {
+        ultima = await fetch(`${s.baseUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ usuario: 'ninguem', senha: 'errada' }),
+        });
+    }
+    assert.equal(ultima.status, 429);
+
+    const retry = Number(ultima.headers.get('retry-after'));
+    assert.ok(Number.isFinite(retry) && retry > 0, 'Retry-After precisa dizer os segundos');
+
+    const corpo = await ultima.json();
+    assert.ok(typeof corpo.erro === 'string' && corpo.erro.length > 0, 'precisa de mensagem util');
+    assert.ok(
+        Number.isFinite(corpo.tentarEmSegundos) && corpo.tentarEmSegundos > 0,
+        'a resposta precisa dizer quanto tempo esperar'
+    );
+});
+
+test('a pagina de redefinicao passa pelo limitador por IP', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    let status = 0;
+    for (let i = 0; i < 35; i += 1) {
+        const resp = await fetch(`${s.baseUrl}/redefinir-senha/token-invalido`);
+        status = resp.status;
+    }
+    assert.equal(status, 429, 'a pagina de redefinicao precisa ser limitada por IP');
+});
+
+test('esqueci-senha limita a quantidade de envios por IP', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+
+    let status = 0;
+    for (let i = 0; i < 10; i += 1) {
+        const r = await pedido(s.baseUrl, '/api/auth/esqueci-senha', {
+            corpo: JSON.stringify({ email: 'alguem@teste.com' }),
+        });
+        status = r.status;
+    }
+    assert.equal(status, 429, 'nao pode dar para pedir redefinicao sem limite');
+});
+
 test('criarMestre direto no banco normaliza os campos', () => {
     const banco = criarBanco(':memory:');
     try {
