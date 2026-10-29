@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Licao 2: menu Usuario, troca de senha e deslogamento</title>
+<link rel="stylesheet" href="../assets/estilo.css">
+</head>
+<body>
+<h1>Licao 2: menu Usuario, troca de senha e deslogamento</h1>
+<p class="subtitulo">Foco: a segunda parte das alterações de hoje, perfil editável e troca de senha por modal, sem esquecer por que o deslogamento importa.</p>
+
+<h2>O que foi criado</h2>
+<div class="etapa"><strong>Menu Usuário.</strong> O item "Usuário" no menu lateral abre a <code>UsuarioScreen.tsx</code>, hoje visível apenas com sessão ativa.</div>
+<div class="etapa"><strong>Backend do perfil.</strong> A migração v2 em <code>klok-api/db.js</code> adicionou as colunas <code>nome</code>, <code>numero</code> e <code>email</code> em <code>usuarios</code>. Os endpoints <code>GET /api/auth/eu</code> e <code>PUT /api/auth/eu</code> leem e atualizam o perfil. O email também pode vir do funcionário vinculado.</div>
+<div class="etapa"><strong>InputSenha.</strong> Componente novo (<code>InputSenha.tsx</code>) com botão de olho desenhado por Views, sem biblioteca de ícones, e com <code>autoCapitalize=none</code> para a senha não ficar capitalizada. Usado no login, na troca de senha e na recuperação.</div>
+<div class="etapa"><strong>Modal de troca de senha.</strong> Três campos (atual, nova, confirmar nova), botão Confirmar, Cancelar em vermelho com <code>botaoModalDeletar</code> e o link "Esqueci minha senha" que troca o conteúdo do modal para o <code>FormularioRecuperarSenha.tsx</code>.</div>
+
+<h2>As validações em dois lugares</h2>
+<p>A regra mora no cliente e também no servidor, nunca só no app:</p>
+<ul>
+<li><strong>App (cliente):</strong> confirmação precisa ser igual à nova, e a nova não pode ser igual à atual.</li>
+<li><strong>Servidor:</strong> <code>PUT /api/auth/senha</code> em <code>klok-api/controladores/auth.js</code> rejeita senha atual incorreta, nova menor que 4 caracteres e nova igual à atual. Quem entrou com Google não troca senha pelo app, pois não tem senha.</li>
+</ul>
+
+<h2>Por que deslogar depois de redefinir</h2>
+<p>O JWT tem validade de 12 horas e continua funcionando mesmo depois da troca de senha. Se o app mantivesse a sessão, o usuário veria a mensagem "faça login" e continuaria logado com o token antigo, o que foi o bug relatado. A correção em <code>App.tsx</code> (função <code>aoConcluirRedefinicao</code>) limpa a sessão e volta para a tela de login. O caminho honesto é: senha mudou, sessão cai, login de novo.</p>
+
+<h2>Primeira coisa para fazer sozinho</h2>
+<p>Abra a <code>UsuarioScreen.tsx</code> e explique em voz alta onde está cada validação do modal. Se travar, volte aqui e depois peça reforço ao agente.</p>
+
+<div class="rodape">Voltar para a <a href="0001-esqueci-minha-senha.html">lição 1</a>, usar o <a href="../reference/glossario.html">glossário</a>. Ficou alguma dúvida? O agente é seu professor, pergunte.</div>
+</body>
+</html>

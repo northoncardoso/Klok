@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Licao 1: o fluxo de esqueci minha senha</title>
+<link rel="stylesheet" href="../assets/estilo.css">
+</head>
+<body>
+<h1>Licao 1: o fluxo de esqueci minha senha de ponta a ponta</h1>
+<p class="subtitulo">Foco: entender o caminho completo do link por email, em que cada decisão protege algo específico.</p>
+
+<h2>O problema</h2>
+<p>O usuário não lembra a senha. Nada no app permite entrar, e nunca é seguro "enviar a senha" por email, pois o app não guarda senha em texto. A saída é provar pelo email que ele é o dono da conta e deixá-lo criar uma senha nova.</p>
+
+<h2>Os 7 passos da jornada</h2>
+
+<div class="etapa"><strong>1. Usuário pede recuperação.</strong> Na tela de login, o link "Esqueci minha senha?" abre o <code>FormularioRecuperarSenha.tsx</code>, que chama <code>POST /api/auth/esqueci-senha</code> (rotas em <code>klok-api/rotas/auth.js</code>).</div>
+
+<div class="etapa"><strong>2. O servidor gera o token.</strong> Em <code>esqueciSenha</code> no <code>klok-api/controladores/auth.js</code> o servidor sorteia <code>randomBytes(32)</code>, ou seja 32 bytes aleatórios (256 bits de entropia). Guarda no banco apenas <code>sha256(token)</code>, com expiração de 30 minutos.</div>
+
+<div class="etapa"><strong>3. Resposta genérica.</strong> Devolve sempre o mesmo texto, exista ou não o email. Se o email não existe, ninguém descobre. Detalhe no glossário: <a href="../reference/glossario.html">resposta genérica</a>.</div>
+
+<div class="etapa"><strong>4. O link vai por email.</strong> <code>klok-api/email.js</code> usa nodemailer quando há SMTP completo no <code>.env</code>. Sem SMTP, loga o link no terminal (fallback de dev). O link montado é <code>URL_BASE + /redefinir-senha/&lt;token&gt;</code>, uma página pública no back-end.</div>
+
+<div class="etapa"><strong>5. Página de confirmação.</strong> A rota pública <code>GET /redefinir-senha/:token</code> no <code>app.js</code> serve um HTML com o botão "Abrir o app Klok". O toque dispara <code>klok://redefinir-senha?token=...</code> e abre o app. Se o token for inválido ou expirado, a página avisa.</div>
+
+<div class="etapa"><strong>6. App recebe o deep link.</strong> O <code>App.tsx</code> escuta o link via <code>Linking</code> e extrai o token manualmente por <code>indexOf('token=')</code>. Renderiza a <code>RedefinirSenhaScreen.tsx</code>.</div>
+
+<div class="etapa"><strong>7. Nova senha e desligamento da sessão.</strong> A tela chama <code>POST /api/auth/redefinir-senha</code>. O servidor valida o token (uso único, não expirado), troca a senha com salt e marca o token como usado. Em seguida o app desloga o usuário via <code>aoConcluirRedefinicao</code>, para que ele entre com a senha nova.</div>
+
+<h2>Por que cada decisão existe</h2>
+<table>
+<tr><th>Decisão</th><th>O que protege</th></tr>
+<tr><td>Hash do token no banco</td><td>Se o banco vazar, ninguém consegue criar links válidos</td></tr>
+<tr><td>Expiração de 30 min</td><td>Limita a janela de ataque de um link perdido</td></tr>
+<tr><td>Uso único</td><td>Torna o link imune a reuso depois de usar</td></tr>
+<tr><td>Resposta genérica</td><td>Não revela quais emails estão cadastrados</td></tr>
+<tr><td>Rate limit no endpoint</td><td>Reduz tentativa em massa de recuperação</td></tr>
+<tr><td>Página HTTPS antes do klok://</td><td>Gmail e navegador bloqueiam clique direto em scheme customizado; o gesto do botão é permitido</td></tr>
+</table>
+
+<h2>Quiz</h2>
+<div class="quiz">
+<ol>
+<li>
+<strong>Onde o token fica guardado depois que o link é gerado?</strong><br>
+<button onclick="responder(this, 'em um hash')">em um hash</button> <button onclick="responder(this, 'em um texto')">em um texto</button>
+<div class="feedback"></div>
+</li>
+<li>
+<strong>Para quantos usos o token vale?</strong><br>
+<button onclick="responder(this, 'uso unico')">uso unico</button> <button onclick="responder(this, 'uso duplo')">uso duplo</button>
+<div class="feedback"></div>
+</li>
+<li>
+<strong>Depois que a senha é redefinida, o usuário fica?</strong><br>
+<button onclick="responder(this, 'fora do app')">fora do app</button> <button onclick="responder(this, 'continua la')">continua la</button>
+<div class="feedback"></div>
+</li>
+</ol>
+</div>
+
+<h2>Fonte primária para ler</h2>
+<p>O <a href="https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html">Forgot Password Cheat Sheet da OWASP</a> é a referência oficial do padrão. Depois, releia <code>klok-api/controladores/auth.js</code> e compare com o que está na tabela acima.</p>
+
+<div class="rodape">Continuar na <a href="0002-menu-usuario-troca-de-senha.html">lição 2</a>, usar o <a href="../reference/glossario.html">glossário</a>. Compreendeu? O agente é seu professor: peça para reforçar qualquer etapa que ficou confusa.</div>
+
+<script>
+function responder(botao, valor) {
+  var correto;
+  var ciencia;
+  var li = botao.parentNode;
+  var feedback = li.querySelector('.feedback');
+  var pergunta = li.querySelector('strong').textContent;
+  if (pergunta.indexOf('onde') !== -1) {
+    correto = 'em um hash';
+    ciencia = 'Guardar o hash impede criar links novos se o banco vazar.';
+  } else if (pergunta.indexOf('quantos') !== -1) {
+    correto = 'uso unico';
+    ciencia = 'O token vale para uma troca de senha. Depois disso todos os tokens do usuario caem.';
+  } else {
+    correto = 'fora do app';
+    ciencia = 'O app limpa a sessao local para exigir login com a senha nova.';
+  }
+  var ok = valor === correto;
+  feedback.innerHTML = (ok ? 'Acertou. ' : 'Quase. ') + ciencia;
+  feedback.style.color = ok ? '#047857' : '#b91c1c';
+  var irmaos = li.querySelectorAll('button');
+  for (var i = 0; i < irmaos.length; i++) { irmaos[i].style.borderColor = '#d1d5db'; }
+  botao.style.borderColor = ok ? '#047857' : '#b91c1c';
+}
+</script>
+</body>
+</html>

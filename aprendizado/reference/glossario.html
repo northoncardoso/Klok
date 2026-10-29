@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossário: recuperação de senha no Klok</title>
+<link rel="stylesheet" href="../assets/estilo.css">
+</head>
+<body>
+<h1>Glossário de recuperação e autenticação</h1>
+<p class="subtitulo">Termos exatos para falar do fluxo de senha no Klok. Use estas definições em qualquer conversa sobre o código.</p>
+
+<h2>Segurança</h2>
+
+<h3>Token de recuperação</h3>
+<p>Valor aleatório de 32 bytes gerado no servidor e enviado por email. Prova que quem clicou tem acesso à caixa de entrada do dono da conta.</p>
+<p><em>Evitar</em>: código de 6 dígitos, senha provisória fixa.</p>
+
+<h3>Hash sha256</h3>
+<p>Função que converte o token em um texto único e irreversível. O banco guarda só o hash, nunca o token original.</p>
+<p><em>Evitar</em>: chamar de criptografia, pois criptografia permite voltar ao valor original.</p>
+
+<h3>Uso único e expiração</h3>
+<p>O token vale por 30 minutos e pode ser trocado por uma nova senha apenas uma vez. Ao usar, todos os tokens do usuário são invalidados.</p>
+<p><em>Evitar</em>: token sem prazo ou reutilizável.</p>
+
+<h3>Resposta genérica</h3>
+<p>O mesmo texto de sucesso é devolvido exista ou não o email, para não revelar contas cadastradas no sistema.</p>
+<p><em>Evitar</em>: mensagens como "email enviado", pois denunciam contas existentes.</p>
+
+<h3>Salt</h3>
+<p>Dado aleatório adicionado à senha antes do hash, para que senhas iguais gerem hashes diferentes. Usado em <code>criarHashSenha</code> no <code>db.js</code>.</p>
+<p><em>Evitar</em>: hash de senha sem salt.</p>
+
+<h2>Navegação entre email e app</h2>
+
+<h3>Deep link</h3>
+<p>URL com scheme próprio do app, como <code>klok://redefinir-senha?token=...</code>, que abre o app instalado no celular.</p>
+<p><em>Evitar</em>: achar que é um link https comum.</p>
+
+<h3>Página de confirmação</h3>
+<p>Página HTML curta servida pelo back-end que, com um toque de botão do usuário, dispara o <code>klok://</code>. Contorna o bloqueio do Gmail e do navegador a schemes customizados.</p>
+<p><em>Evitar</em>: botão invisível ou redirecionamento automático, que o navegador bloqueia.</p>
+
+<h3>Sessão</h3>
+<p>Conjunto token JWT guardado no celular que mantém o usuário logado. Limpar a sessão obriga novo login.</p>
+<p><em>Evitar</em>: chamar sessão de cookie, que é tecnologia de navegador.</p>
+
+<h3>Deslogamento</h3>
+<p>Ação de apagar a sessão local após a redefinição, para o usuário entrar com a senha nova.</p>
+<p><em>Evitar</em>: manter o usuário conectado com o token antigo.</p>
+
+<div class="rodape">Voltar para a <a href="../lessons/0001-esqueci-minha-senha.html">lição 1</a> ou para a <a href="../lessons/0002-menu-usuario-troca-de-senha.html">lição 2</a>.</div>
+</body>
+</html>

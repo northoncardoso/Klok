@@ -1,0 +1,78 @@
+:root {
+  --fundo: #fffff8;
+  --papel: #fffdf3;
+  --tinta: #1f2937;
+  --tinta-suave: #4b5563;
+  --vermelho: #dc2626;
+  --borda: #e5e7eb;
+  --codigo: #f3f4f6;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--fundo);
+  color: var(--tinta);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 720px;
+  margin: 2rem auto;
+  padding: 0 1.2rem;
+}
+h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 .4rem; }
+h2 { font-size: 1.25rem; margin: 2rem 0 .6rem; color: var(--vermelho); }
+h3 { font-size: 1.05rem; margin: 1.4rem 0 .4rem; }
+p { margin: .6rem 0; }
+.subtitulo { color: var(--tinta-suave); margin-bottom: 1.6rem; }
+.etapa {
+  background: var(--papel);
+  border: 1px solid var(--borda);
+  border-left: 4px solid var(--vermelho);
+  border-radius: 6px;
+  padding: .7rem 1rem;
+  margin: .8rem 0;
+}
+code {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .85em;
+  background: var(--codigo);
+  border-radius: 4px;
+  padding: .1em .35em;
+}
+blockquote {
+  border-left: 3px solid var(--borda);
+  margin: 1rem 0;
+  padding-left: 1rem;
+  color: var(--tinta-suave);
+}
+details {
+  background: var(--papel);
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: .5rem 1rem;
+  margin: .5rem 0;
+}
+summary { font-weight: bold; cursor: pointer; }
+.quiz li { margin: .5rem 0; list-style: none; }
+.quiz button {
+  font-family: inherit;
+  font-size: 1rem;
+  background: #fff;
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: .45rem .9rem;
+  cursor: pointer;
+  color: var(--tinta);
+}
+.quiz button:hover { border-color: var(--vermelho); }
+.feedback { margin-top: .6rem; color: var(--tinta-suave); }
+a { color: var(--vermelho); }
+.rodape {
+  margin-top: 3rem;
+  border-top: 1px solid var(--borda);
+  padding-top: 1rem;
+  font-size: .95rem;
+  color: var(--tinta-suave);
+}
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+th, td { border: 1px solid var(--borda); padding: .45rem .6rem; text-align: left; }
+th { background: var(--papel); }
