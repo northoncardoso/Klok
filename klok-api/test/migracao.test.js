@@ -10,7 +10,7 @@ test('criarBanco aplica migrações e marca a versão atual', () => {
     const banco = criarBanco(':memory:');
 
     assert.equal(banco.userVersion(), MIGRACOES.length);
-    assert.equal(banco.existeMestre(), false, 'nenhum mestre é semeado no boot');
+    assert.equal(banco.existeCoordenador(), false, 'nenhum coordenador é semeado no boot');
     banco.db.close();
 });
 
@@ -42,6 +42,34 @@ test('banco legado migra sem perder dados', () => {
     rmSync(dir, { recursive: true, force: true });
 });
 
+test('banco legado com mestre vira coordenador e aceita um segundo', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'klok-migra-mestre-'));
+    const caminho = join(dir, 'klok.db');
+    const bruto = new DatabaseSync(caminho);
+    for (const migracao of MIGRACOES.slice(0, 5)) bruto.exec(migracao.sql);
+    bruto.exec('PRAGMA user_version = 5');
+    bruto.exec(
+        "INSERT INTO usuarios (usuario, senhaHash, tipo) VALUES ('chefe-antigo', 'hash', 'mestre')"
+    );
+    bruto.close();
+
+    const banco = criarBanco(caminho);
+    const antigo = banco.buscarUsuarioPorLogin('chefe-antigo');
+    assert.equal(antigo.tipo, 'coordenador', 'o papel antigo precisa ser renomeado');
+    assert.equal(banco.contarCoordenadores(), 1);
+
+    banco.criarCoordenador('segundo-chefe', 'senha-1234', 'Segundo', 'segundo@teste.com', '2');
+    assert.equal(banco.contarCoordenadores(), 2, 'o índice único não pode mais barrar o segundo');
+
+    const indice = banco.db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_usuarios_mestre'")
+        .get();
+    assert.equal(indice, undefined, 'o índice antigo precisa ser removido');
+
+    banco.db.close();
+    rmSync(dir, { recursive: true, force: true });
+});
+
 test('cada migração nova é aplicada em ordem e sem pular versão', () => {
     const versoes = MIGRACOES.map((m) => m.versao);
     assert.deepEqual(
@@ -62,7 +90,7 @@ test('cada migração nova é aplicada em ordem e sem pular versão', () => {
 
 test('atualizar senha incrementa a versão e mantém a sessão antiga revogada', () => {
     const banco = criarBanco(':memory:');
-    banco.criarMestre('chefe', 'senha-1234', 'Chefe', 'chefe@teste.com', '1');
+    banco.criarCoordenador('chefe', 'senha-1234', 'Chefe', 'chefe@teste.com', '1');
     const antes = banco.buscarUsuarioPorLogin('chefe');
     assert.equal(Number(antes.senhaVersao), 0);
 

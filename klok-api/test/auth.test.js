@@ -1,73 +1,145 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { iniciarApp, criarMestre, logar, MESTRE, MESTRE_SENHA } from './helpers.js';
+import { iniciarApp, criarCoordenador, logar, COORDENADOR, COORDENADOR_SENHA } from './helpers.js';
 
-test('GET /api/auth/mestre responde cadastrado false antes do primeiro acesso', async (t) => {
-    const s = await iniciarApp({ comMestre: false });
+test('GET /api/auth/coordenador responde cadastrado false antes do primeiro acesso', async (t) => {
+    const s = await iniciarApp({ comCoordenador: false });
     t.after(() => s.fechar());
 
-    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`);
+    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`);
     assert.equal(resp.status, 200);
     assert.deepEqual(await resp.json(), { cadastrado: false });
 });
 
-test('cadastrar o mestre cria o usuário, devolve token de mestre e já autentica', async (t) => {
-    const s = await iniciarApp({ comMestre: false });
+test('cadastrar o coordenador cria o usuário, devolve token de coordenador e já autentica', async (t) => {
+    const s = await iniciarApp({ comCoordenador: false });
     t.after(() => s.fechar());
 
-    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`, {
+    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(MESTRE),
+        body: JSON.stringify(COORDENADOR),
     });
     assert.equal(resp.status, 201);
     const corpo = await resp.json();
-    assert.equal(corpo.tipo, 'mestre');
+    assert.equal(corpo.tipo, 'coordenador');
     assert.ok(corpo.token, 'deve devolver token para entrar direto no app');
 
-    const status = await (await fetch(`${s.baseUrl}/api/auth/mestre`)).json();
+    const status = await (await fetch(`${s.baseUrl}/api/auth/coordenador`)).json();
     assert.equal(status.cadastrado, true);
 
     const guardado = s.banco.db
         .prepare('SELECT usuario, senhaHash, tipo, email, numero FROM usuarios WHERE usuario = ?')
-        .get(MESTRE.usuario);
-    assert.equal(guardado.tipo, 'mestre');
+        .get(COORDENADOR.usuario);
+    assert.equal(guardado.tipo, 'coordenador');
     assert.ok(guardado.senhaHash.startsWith('scrypt$'), 'senha deve ser guardada com salt');
-    assert.equal(guardado.email, MESTRE.email);
-    assert.equal(guardado.numero, MESTRE.numero);
+    assert.equal(guardado.email, COORDENADOR.email);
+    assert.equal(guardado.numero, COORDENADOR.numero);
 
-    const token = await logar(s.baseUrl, MESTRE.usuario, MESTRE.senha);
-    assert.ok(token, 'o mestre deve conseguir fazer login com a senha escolhida');
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR.senha);
+    assert.ok(token, 'o coordenador deve conseguir fazer login com a senha escolhida');
 });
 
-test('cadastrar o mestre só pode ser feito uma vez', async (t) => {
+test('a rota pública só cria o primeiro coordenador', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`, {
+    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...MESTRE, usuario: 'outro-mestre' }),
+        body: JSON.stringify({ ...COORDENADOR, usuario: 'outro-coordenador' }),
     });
     assert.equal(resp.status, 409);
-    assert.equal(s.banco.buscarUsuarioPorLogin('outro-mestre'), undefined, 'não pode criar segundo mestre');
+    assert.equal(
+        s.banco.buscarUsuarioPorLogin('outro-coordenador'),
+        undefined,
+        'o primeiro coordenador entra pela rota pública; os demais, pela rota autenticada'
+    );
 });
 
-test('cadastro do mestre exige usuário, senha, email e número', async (t) => {
-    const s = await iniciarApp({ comMestre: false });
+test('coordenador autenticado cadastra e lista outro coordenador', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
+
+    const resp = await fetch(`${s.baseUrl}/api/coordenadores`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+            usuario: 'coordenador2',
+            senha: 'senha-2',
+            nome: 'Segundo Coordenador',
+            email: 'c2@klok.app',
+            numero: '11988887777',
+        }),
+    });
+    assert.equal(resp.status, 201);
+    const corpo = await resp.json();
+    assert.equal(corpo.tipo, 'coordenador');
+
+    const lista = await (
+        await fetch(`${s.baseUrl}/api/coordenadores`, {
+            headers: { authorization: `Bearer ${token}` },
+        })
+    ).json();
+    assert.equal(lista.length, 2, 'os dois coordenadores precisam aparecer na lista');
+    assert.equal(s.banco.contarCoordenadores(), 2);
+
+    const tokenNovo = await logar(s.baseUrl, 'coordenador2', 'senha-2');
+    assert.ok(tokenNovo, 'o novo coordenador precisa conseguir entrar');
+});
+
+test('funcionário não lista nem cadastra coordenador', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario: 'ana', senha: '123456' }),
+    });
+    const token = await logar(s.baseUrl, 'ana', '123456');
+
+    const lista = await fetch(`${s.baseUrl}/api/coordenadores`, {
+        headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(lista.status, 403);
+
+    const criar = await fetch(`${s.baseUrl}/api/coordenadores`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify(COORDENADOR),
+    });
+    assert.equal(criar.status, 403);
+});
+
+test('novo coordenador com usuário já em uso retorna 409', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
+
+    const resp = await fetch(`${s.baseUrl}/api/coordenadores`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...COORDENADOR, usuario: COORDENADOR.usuario }),
+    });
+    assert.equal(resp.status, 409);
+});
+
+test('cadastro do coordenador exige usuário, senha, email e número', async (t) => {
+    const s = await iniciarApp({ comCoordenador: false });
     t.after(() => s.fechar());
 
     const invalidos = [
-        { ...MESTRE, usuario: '  ' },
-        { ...MESTRE, senha: '' },
-        { ...MESTRE, senha: '123' },
-        { ...MESTRE, email: '' },
-        { ...MESTRE, email: 'sem-arroba' },
-        { ...MESTRE, numero: '' },
+        { ...COORDENADOR, usuario: '  ' },
+        { ...COORDENADOR, senha: '' },
+        { ...COORDENADOR, senha: '123' },
+        { ...COORDENADOR, email: '' },
+        { ...COORDENADOR, email: 'sem-arroba' },
+        { ...COORDENADOR, numero: '' },
     ];
 
     for (const corpo of invalidos) {
-        const resp = await fetch(`${s.baseUrl}/api/auth/mestre`, {
+        const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(corpo),
@@ -75,21 +147,21 @@ test('cadastro do mestre exige usuário, senha, email e número', async (t) => {
         assert.equal(resp.status, 400, `esperava 400 para ${JSON.stringify(corpo)}`);
     }
 
-    assert.equal(s.banco.existeMestre(), false, 'nenhum mestre deve ter sido criado');
+    assert.equal(s.banco.existeCoordenador(), false, 'nenhum coordenador deve ter sido criado');
 });
 
-test('email e número do mestre reaparecem no próprio perfil', async (t) => {
+test('email e número do coordenador reaparecem no próprio perfil', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const token = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
     const eu = await (await fetch(`${s.baseUrl}/api/auth/eu`, {
         headers: { authorization: `Bearer ${token}` },
     })).json();
 
-    assert.equal(eu.tipo, 'mestre');
-    assert.equal(eu.email, MESTRE.email);
-    assert.equal(eu.numero, MESTRE.numero);
+    assert.equal(eu.tipo, 'coordenador');
+    assert.equal(eu.email, COORDENADOR.email);
+    assert.equal(eu.numero, COORDENADOR.numero);
 });
 
 test('registro de usuário e login local devolvem token', async (t) => {
@@ -151,17 +223,17 @@ test('login com senha errada retorna 401', async (t) => {
     const resp = await fetch(`${s.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'mestre', senha: 'senha-errada' }),
+        body: JSON.stringify({ usuario: 'coordenador', senha: 'senha-errada' }),
     });
     assert.equal(resp.status, 401);
 });
 
-test('login do mestre devolve token e tipo mestre', async (t) => {
+test('login do coordenador devolve token e tipo coordenador', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
-    assert.ok(token, 'mestre deve autenticar com a senha semeada');
+    const token = await logar(s.baseUrl, 'coordenador', COORDENADOR_SENHA);
+    assert.ok(token, 'coordenador deve autenticar com a senha semeada');
 });
 
 test('rate limit bloqueia login após muitas tentativas', async (t) => {
@@ -173,7 +245,7 @@ test('rate limit bloqueia login após muitas tentativas', async (t) => {
         const resp = await fetch(`${s.baseUrl}/api/auth/login`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ usuario: 'mestre', senha: 'senha-errada' }),
+            body: JSON.stringify({ usuario: 'coordenador', senha: 'senha-errada' }),
         });
         ultimo = resp.status;
     }
@@ -292,20 +364,20 @@ test('PUT /api/auth/eu atualiza os dados do usuário', async (t) => {
     assert.equal(corpo.email, 'duda@mail.com');
 });
 
-test('mestre também atualiza dados próprios pelo perfil', async (t) => {
+test('coordenador também atualiza dados próprios pelo perfil', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
+    const token = await logar(s.baseUrl, 'coordenador', COORDENADOR_SENHA);
 
     const resp = await fetch(`${s.baseUrl}/api/auth/eu`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ nome: 'Mestre da Empresa', numero: '', email: 'mestre@mail.com' }),
+        body: JSON.stringify({ nome: 'Coordenador da Empresa', numero: '', email: 'coordenador@mail.com' }),
     });
     assert.equal(resp.status, 200);
     const corpo = await resp.json();
-    assert.equal(corpo.nome, 'Mestre da Empresa');
-    assert.equal(corpo.email, 'mestre@mail.com');
+    assert.equal(corpo.nome, 'Coordenador da Empresa');
+    assert.equal(corpo.email, 'coordenador@mail.com');
 });
 
 test('senha atual incorreta retorna 401 e não altera a senha', async (t) => {

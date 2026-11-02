@@ -5,13 +5,13 @@ import { criarBanco } from '../db.js';
 import { criarApp } from '../app.js';
 import { iniciarApp, logar } from './helpers.js';
 
-test('criarBanco não semeia nenhum mestre e não exige SENHA_MESTRE', () => {
+test('criarBanco não semeia nenhum coordenador e não exige SENHA_MESTRE', () => {
     const antes = process.env.SENHA_MESTRE;
     delete process.env.SENHA_MESTRE;
     try {
         const banco = criarBanco(':memory:');
-        assert.equal(banco.existeMestre(), false);
-        assert.equal(banco.buscarUsuarioPorLogin('mestre'), undefined);
+        assert.equal(banco.existeCoordenador(), false);
+        assert.equal(banco.buscarUsuarioPorLogin('coordenador'), undefined);
         banco.db.close();
     } finally {
         if (antes === undefined) delete process.env.SENHA_MESTRE;

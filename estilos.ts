@@ -252,8 +252,8 @@ import { StyleSheet } from 'react-native';
             color: 'dodgerblue',
             fontSize: 14,
         },
-        // Aviso em vermelho da tela de cadastro do mestre
-        estilosMestreAviso: {
+        // Aviso em vermelho da tela de cadastro do coordenador
+        estilosCoordenadorAviso: {
             backgroundColor: '#fde8e8',
             borderColor: '#dc2626',
             borderWidth: 1,
@@ -262,13 +262,13 @@ import { StyleSheet } from 'react-native';
             marginBottom: 20,
             width: '85%',
         },
-        estilosMestreAvisoTexto: {
+        estilosCoordenadorAvisoTexto: {
             color: '#b91c1c',
             fontSize: 13,
             lineHeight: 19,
             textAlign: 'center',
         },
-        estilosMestreBotao: {
+        estilosCoordenadorBotao: {
             backgroundColor: '#dc2626',
             paddingVertical: 14,
             paddingHorizontal: 40,

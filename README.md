@@ -3,10 +3,11 @@
 Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto**.
 
 - Login por **usuário/senha** (local) ou **Entrar com Google** (OAuth2).
-- **Cadastro do mestre no primeiro uso**: na primeira abertura o app pede que
-  você crie o usuário mestre (usuário, senha, email e celular). É ele quem
-  gerencia os funcionários, e só pode ser criado uma vez.
-- Perfil **mestre** controla os funcionários (cadastra, edita, exclui e vê os pontos de todos).
+- **Cadastro do coordenador no primeiro uso**: na primeira abertura o app pede que
+  você crie o usuário coordenador (usuário, senha, email e celular). É ele quem
+  gerencia os funcionários.
+- Perfil **coordenador** controla os funcionários (cadastra, edita, exclui e vê os
+  pontos de todos) e pode criar outros coordenadores na tela de Coordenadores.
 - Funcionário **bate o ponto** e vê o próprio histórico.
 - Todo dado fica centralizado em um **backend Node.js/Express** com SQLite (nativo do Node, sem dependência extra).
 
@@ -45,9 +46,9 @@ npm install
 npm start                 # sobe na porta 3000
 ```
 
-O boot exige apenas o `JWT_SECRET`. **Nenhuma senha de mestre vem pronta**: o banco
+O boot exige apenas o `JWT_SECRET`. **Nenhuma senha de coordenador vem pronta**: o banco
 nasce sem nenhum usuário e o primeiro acesso do app abre a tela de cadastro do
-mestre. O backend só falha no boot se o `JWT_SECRET` não estiver configurado.
+coordenador. O backend só falha no boot se o `JWT_SECRET` não estiver configurado.
 
 > Antes era usada a variável `SENHA_MESTRE`, que semeava um usuário `mestre` com
 > senha conhecida no `.env`. Isso foi removido: agora cada instalação tem a senha
@@ -116,19 +117,21 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 
 | Método | Rota | Acesso | Descrição |
 |--------|------|--------|-----------|
-| GET | `/api/auth/mestre` | público | Diz se o mestre já foi cadastrado |
-| POST | `/api/auth/mestre` | público | Cadastra o mestre (só na primeira vez) → JWT |
+| GET | `/api/auth/coordenador` | público | Diz se o coordenador já foi cadastrado |
+| POST | `/api/auth/coordenador` | público | Cadastra o primeiro coordenador → JWT |
+| GET | `/api/coordenadores` | coordenador | Lista os coordenadores |
+| POST | `/api/coordenadores` | coordenador | Cadastra outro coordenador |
 | POST | `/api/auth/registrar` | público | Cadastra funcionário local |
 | POST | `/api/auth/login` | público | Login local → JWT |
 | POST | `/api/auth/google` | público | Login Google (envia `idToken`) → JWT |
 | GET | `/api/auth/eu` | logado | Dados do usuário |
-| GET | `/api/funcionarios` | mestre | Lista funcionários |
-| POST | `/api/funcionarios` | mestre | Cria funcionário |
-| PUT | `/api/funcionarios/:id` | mestre | Edita funcionário |
-| DELETE | `/api/funcionarios/:id` | mestre | Exclui funcionário |
+| GET | `/api/funcionarios` | coordenador | Lista funcionários |
+| POST | `/api/funcionarios` | coordenador | Cria funcionário |
+| PUT | `/api/funcionarios/:id` | coordenador | Edita funcionário |
+| DELETE | `/api/funcionarios/:id` | coordenador | Exclui funcionário |
 | POST | `/api/pontos` | logado | Bate o ponto |
 | GET | `/api/pontos/meus` | logado | Meu histórico |
-| GET | `/api/pontos` | mestre | Pontos de todos |
+| GET | `/api/pontos` | coordenador | Pontos de todos |
 
 Autenticação: header `Authorization: Bearer <token>`.
 
@@ -148,7 +151,7 @@ Raiz (app):
 - `URL_BASE` — base pública usada no link de recuperação por email
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_REMETENTE` — envio do email de recuperação
 
-Não existe mais `SENHA_MESTRE`: a senha do mestre é definida por você no app.
+Não existe mais `SENHA_MESTRE`: a senha do coordenador é definida por você no app.
 
 ### Segurança
 
@@ -166,20 +169,20 @@ Duas coisas obrigatórias antes de expor a API fora da sua rede local:
 
 ---
 
-## Primeiro acesso: cadastro do mestre
+## Primeiro acesso: cadastro do coordenador
 
-O app consulta `GET /api/auth/mestre` ao abrir. Se responder `cadastrado: false`,
-a primeira tela é o **cadastro do mestre**, com um aviso em vermelho explicando
-que ele precisa ser criado antes de usar o app, que é único e que será reutilizado
-para sempre na gestão de funcionários.
+O app consulta `GET /api/auth/coordenador` ao abrir. Se responder `cadastrado: false`,
+a primeira tela é o **cadastro do coordenador**, com um aviso em vermelho explicando
+que ele precisa ser criado antes de usar o app. Depois desse primeiro, outros
+coordenadores são criados dentro do app, na tela de Coordenadores.
 
 Os campos, nesta ordem:
 
-1. Nome de usuário mestre
+1. Nome de usuário coordenador
 2. Senha
 3. Email
 4. Número de celular
 
-Depois de salvar, o app já entra logado com o perfil de mestre. O `POST
-/api/auth/mestre` responde **409** se o mestre já existir, então ninguém consegue
+Depois de salvar, o app já entra logado com o perfil de coordenador. O `POST
+/api/auth/coordenador` responde **409** se o coordenador já existir, então ninguém consegue
 sequestrar a conta depois. A senha é guardada com `scrypt` e sal, igual às demais.

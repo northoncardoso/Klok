@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { PAPEL_MESTRE } from './constantes.js';
+import { PAPEL_COORDENADOR } from './constantes.js';
 
 const PREFIXO_HASH = 'scrypt$';
 
@@ -80,6 +80,14 @@ export const MIGRACOES = [
                 ON usuarios(tipo) WHERE tipo = 'mestre';
         `,
     },
+    {
+        versao: 6,
+        nome: 'mestre vira coordenador e pode haver mais de um',
+        sql: `
+            UPDATE usuarios SET tipo = 'coordenador' WHERE tipo = 'mestre';
+            DROP INDEX IF EXISTS idx_usuarios_mestre;
+        `,
+    },
 ];
 
 export function criarBanco(caminho = 'klok.db') {
@@ -106,22 +114,31 @@ export function criarBanco(caminho = 'klok.db') {
 
     aplicarMigracoes();
 
-    function existeMestre() {
-        return !!db.prepare('SELECT id FROM usuarios WHERE tipo = ? LIMIT 1').get(PAPEL_MESTRE);
+    function existeCoordenador() {
+        return !!db.prepare('SELECT id FROM usuarios WHERE tipo = ? LIMIT 1').get(PAPEL_COORDENADOR);
     }
 
-    function criarMestre(usuario, senha, nome, email, numero) {
+    function criarCoordenador(usuario, senha, nome, email, numero) {
         const r = db.prepare(
             `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, nome, numero, email)
              VALUES (?, ?, ?, NULL, ?, ?, ?)`
-        ).run(paraTexto(usuario), criarHashSenha(senha), PAPEL_MESTRE, paraTexto(nome), paraTexto(numero), paraTexto(email));
+        ).run(paraTexto(usuario), criarHashSenha(senha), PAPEL_COORDENADOR, paraTexto(nome), paraTexto(numero), paraTexto(email));
         return buscarUsuarioPorId(r.lastInsertRowid);
     }
 
-    function contarMestres() {
+    function contarCoordenadores() {
         return Number(
-            db.prepare('SELECT COUNT(*) AS total FROM usuarios WHERE tipo = ?').get(PAPEL_MESTRE).total
+            db.prepare('SELECT COUNT(*) AS total FROM usuarios WHERE tipo = ?').get(PAPEL_COORDENADOR).total
         );
+    }
+
+    function listarCoordenadores() {
+        return db.prepare(
+            `SELECT id, usuario, nome, numero, email
+             FROM usuarios
+             WHERE tipo = ?
+             ORDER BY usuario`
+        ).all(PAPEL_COORDENADOR);
     }
 
     function criarHashSenha(senha) {
@@ -290,9 +307,10 @@ export function criarBanco(caminho = 'klok.db') {
     return {
         db,
         userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
-        existeMestre,
-        contarMestres,
-        criarMestre,
+        existeCoordenador,
+        contarCoordenadores,
+        criarCoordenador,
+        listarCoordenadores,
         criarHashSenha,
         verificarSenha,
         criarFuncionario,

@@ -12,18 +12,19 @@ import {
 
 import estilos from './estilos';
 import HomeScreen from './screens/HomeScreen';
-import CriarMestreScreen from './screens/CriarMestreScreen';
+import CriarCoordenadorScreen from './screens/CriarCoordenadorScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
+import CoordenadoresScreen from './screens/CoordenadoresScreen';
 import PontoScreen from './screens/PontoScreen';
 import RedefinirSenhaScreen from './screens/RedefinirSenhaScreen';
 import UsuarioScreen from './screens/UsuarioScreen';
 import { api, lerSessao, limparSessao, mensagemDeErro, salvarSessao } from './api';
 import type { Sessao } from './types';
 
-type Tela = 'Home' | 'Funcionarios' | 'Bater o ponto' | 'Usuario';
+type Tela = 'Home' | 'Funcionarios' | 'Coordenadores' | 'Bater o ponto' | 'Usuario';
 type Portao =
     | { estado: 'carregando' }
-    | { estado: 'mestre-pendente' }
+    | { estado: 'coordenador-pendente' }
     | { estado: 'pronto' }
     | { estado: 'erro'; mensagem: string };
 
@@ -70,15 +71,15 @@ export default function App() {
                 setTelaAtual('Bater o ponto');
             }
 
-            if (s && s.token && s.tipo === 'mestre') {
+            if (s && s.token && s.tipo === 'coordenador') {
                 setPortao({ estado: 'pronto' });
                 return;
             }
 
             try {
-                const status = await api.statusMestre();
+                const status = await api.statusCoordenador();
                 if (!status.cadastrado) {
-                    setPortao({ estado: 'mestre-pendente' });
+                    setPortao({ estado: 'coordenador-pendente' });
                     return;
                 }
                 setPortao({ estado: 'pronto' });
@@ -91,9 +92,9 @@ export default function App() {
     const tentarNovamente = async () => {
         setPortao({ estado: 'carregando' });
         try {
-            const status = await api.statusMestre();
+            const status = await api.statusCoordenador();
             setPortao(
-                status.cadastrado ? { estado: 'pronto' } : { estado: 'mestre-pendente' }
+                status.cadastrado ? { estado: 'pronto' } : { estado: 'coordenador-pendente' }
             );
         } catch (e) {
             setPortao({ estado: 'erro', mensagem: mensagemDeErro(e) });
@@ -147,7 +148,7 @@ export default function App() {
     const entrarComSessao = (dados: Sessao) => {
         setSessao(dados);
         setTelaAtual('Bater o ponto');
-        if (dados.tipo === 'mestre') setPortao({ estado: 'pronto' });
+        if (dados.tipo === 'coordenador') setPortao({ estado: 'pronto' });
     };
 
     const renderizarTela = () => {
@@ -160,8 +161,8 @@ export default function App() {
             );
         }
 
-        if (portao.estado === 'mestre-pendente' && !sessao) {
-            return <CriarMestreScreen aoEntrar={entrarComSessao} />;
+        if (portao.estado === 'coordenador-pendente' && !sessao) {
+            return <CriarCoordenadorScreen aoEntrar={entrarComSessao} />;
         }
 
         if (!sessao) {
@@ -181,8 +182,12 @@ export default function App() {
                     </View>
                 );
             case 'Funcionarios':
-                return sessao.tipo === 'mestre' ? (
+                return sessao.tipo === 'coordenador' ? (
                     <FuncionariosScreen token={sessao.token} />
+                ) : null;
+            case 'Coordenadores':
+                return sessao.tipo === 'coordenador' ? (
+                    <CoordenadoresScreen token={sessao.token} />
                 ) : null;
             case 'Bater o ponto':
                 return <PontoScreen token={sessao.token} />;
@@ -260,9 +265,15 @@ export default function App() {
                             <Text style={estilos.estilosMenuTextoItemMenu}>Início</Text>
                         </TouchableOpacity>
 
-                        {sessao?.tipo === 'mestre' && (
+                        {sessao?.tipo === 'coordenador' && (
                             <TouchableOpacity style={estilos.estilosMenuItemMenu} onPress={() => irPara('Funcionarios')}>
                                 <Text style={estilos.estilosMenuTextoItemMenu}>Funcionários</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {sessao?.tipo === 'coordenador' && (
+                            <TouchableOpacity style={estilos.estilosMenuItemMenu} onPress={() => irPara('Coordenadores')}>
+                                <Text style={estilos.estilosMenuTextoItemMenu}>Coordenadores</Text>
                             </TouchableOpacity>
                         )}
 

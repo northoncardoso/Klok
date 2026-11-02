@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SignJWT } from 'jose';
 import { criarBanco } from '../db.js';
-import { iniciarApp, criarMestre, logar, MESTRE, MESTRE_SENHA } from './helpers.js';
+import { iniciarApp, criarCoordenador, logar, COORDENADOR, COORDENADOR_SENHA } from './helpers.js';
 import { destinatarioValido } from '../email.js';
 
 const rejeicoesNaoTratadas = [];
@@ -58,8 +58,8 @@ const PAYLOADS_MALFORMADOS = [
     ['login senha null', '/api/auth/login', { usuario: 'alguem', senha: null }],
     ['registrar usuario objeto', '/api/auth/registrar', { usuario: {}, senha: 'x' }],
     ['registrar nome objeto', '/api/auth/registrar', { usuario: 'novo', senha: 'x', nome: {} }],
-    ['mestre email objeto', '/api/auth/mestre', { usuario: 'm', senha: 'abcd', email: {}, numero: '1' }],
-    ['mestre usuario objeto', '/api/auth/mestre', { usuario: {}, senha: 'abcd', email: 'a@b.com', numero: '1' }],
+    ['coordenador email objeto', '/api/auth/coordenador', { usuario: 'm', senha: 'abcd', email: {}, numero: '1' }],
+    ['coordenador usuario objeto', '/api/auth/coordenador', { usuario: {}, senha: 'abcd', email: 'a@b.com', numero: '1' }],
     ['google idToken objeto', '/api/auth/google', { idToken: {} }],
     ['esqueci email objeto', '/api/auth/esqueci-senha', { email: {} }],
     ['esqueci email array', '/api/auth/esqueci-senha', { email: ['a@b.com'] }],
@@ -99,7 +99,7 @@ test('a API continua respondendo depois dos payloads malformados', async (t) => 
         await pedido(s.baseUrl, caminho, { corpo: JSON.stringify(corpo) });
     }
 
-    const vivo = await pedido(s.baseUrl, '/api/auth/mestre', { metodo: 'GET' });
+    const vivo = await pedido(s.baseUrl, '/api/auth/coordenador', { metodo: 'GET' });
     assert.equal(vivo.status, 200, 'a API precisa continuar viva');
     assert.deepEqual(vivo.corpo, { cadastrado: true });
 });
@@ -123,7 +123,7 @@ test('corpo grande demais responde 413 em vez de derrubar a API', async (t) => {
     assert.equal(r.status, 413);
     assert.ok(naoVazaInterno(r.texto));
 
-    const vivo = await pedido(s.baseUrl, '/api/auth/mestre', { metodo: 'GET' });
+    const vivo = await pedido(s.baseUrl, '/api/auth/coordenador', { metodo: 'GET' });
     assert.equal(vivo.status, 200);
 });
 
@@ -131,10 +131,10 @@ test('editar funcionário sem nome responde 400 e não derruba a API', async (t)
     const s = await iniciarApp({ limiteAuth: 1000 });
     t.after(() => s.fechar());
 
-    const tokenMestre = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const tokenCoordenador = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
     const criado = await pedido(s.baseUrl, '/api/funcionarios', {
         metodo: 'POST',
-        token: tokenMestre,
+        token: tokenCoordenador,
         corpo: JSON.stringify({ nome: 'Joao Silva', numero: '1', email: 'joao@t.com' }),
     });
     assert.equal(criado.status, 201);
@@ -142,14 +142,14 @@ test('editar funcionário sem nome responde 400 e não derruba a API', async (t)
     for (const corpo of [{}, { nome: 123 }, { nome: {} }, { nome: '   ' }, { nome: 'ok', email: 'invalido' }]) {
         const r = await pedido(s.baseUrl, `/api/funcionarios/${criado.corpo.id}`, {
             metodo: 'PUT',
-            token: tokenMestre,
+            token: tokenCoordenador,
             corpo: JSON.stringify(corpo),
         });
         assert.equal(r.status, 400, `esperava 400 para ${JSON.stringify(corpo)}`);
         assert.ok(naoVazaInterno(r.texto), `vazou: ${r.texto.slice(0, 160)}`);
     }
 
-    const vivo = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: tokenMestre });
+    const vivo = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: tokenCoordenador });
     assert.equal(vivo.status, 200);
 });
 
@@ -157,7 +157,7 @@ test('a API não anuncia a tecnologia e envia headers de proteção', async (t) 
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`);
+    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`);
     assert.equal(resp.headers.get('x-powered-by'), null);
     assert.equal(resp.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(resp.headers.get('x-frame-options'), 'DENY');
@@ -169,7 +169,7 @@ test('a API envia Content-Security-Policy alem dos outros headers', async (t) =>
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const resp = await fetch(`${s.baseUrl}/api/auth/mestre`);
+    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`);
     const csp = resp.headers.get('content-security-policy');
     assert.ok(csp && csp.includes("default-src 'self'"), `precisa vir CSP, veio: ${csp}`);
 });
@@ -179,7 +179,7 @@ test('a pagina de redefinicao abre o app por link, sem script inline', async (t)
     t.after(() => s.fechar());
 
     const recuperacao = await pedido(s.baseUrl, '/api/auth/esqueci-senha', {
-        corpo: JSON.stringify({ email: MESTRE.email }),
+        corpo: JSON.stringify({ email: COORDENADOR.email }),
     });
     const linkPagina = recuperacao.corpo.linkPagina;
     assert.ok(linkPagina, 'o ambiente de teste devolve o link da pagina');
@@ -252,18 +252,18 @@ test('email com CRLF é recusado na recuperação e nenhum email é enviado', as
     assert.deepEqual(enviados, [], 'nenhum email pode ter sido enviado');
 });
 
-test('cadastro do mestre recusa email com CRLF', async (t) => {
-    const s = await iniciarApp({ comMestre: false, limiteAuth: 1000 });
+test('cadastro do coordenador recusa email com CRLF', async (t) => {
+    const s = await iniciarApp({ comCoordenador: false, limiteAuth: 1000 });
     t.after(() => s.fechar());
 
     for (const [nome, malicioso] of INJECOES) {
-        const r = await pedido(s.baseUrl, '/api/auth/mestre', {
-            corpo: JSON.stringify({ ...MESTRE, email: malicioso }),
+        const r = await pedido(s.baseUrl, '/api/auth/coordenador', {
+            corpo: JSON.stringify({ ...COORDENADOR, email: malicioso }),
         });
-        assert.equal(r.status, 400, `esperava 400 no cadastro do mestre para ${nome}`);
+        assert.equal(r.status, 400, `esperava 400 no cadastro do coordenador para ${nome}`);
     }
 
-    assert.equal(s.banco.existeMestre(), false, 'nenhum mestre pode ter sido criado');
+    assert.equal(s.banco.existeCoordenador(), false, 'nenhum coordenador pode ter sido criado');
 });
 
 test('destinatarioValido rejeita CRLF, tipos exóticos e email sem arroba', () => {
@@ -287,15 +287,15 @@ test('o link de redefinição não volta na resposta quando NODE_ENV é producti
     const s = await iniciarApp({ limiteAuth: 1000, enviarEmail: async () => {} });
     t.after(() => s.fechar());
 
-    const tokenFuncionario = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const tokenFuncionario = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
     await pedido(s.baseUrl, '/api/auth/eu', {
         metodo: 'PUT',
         token: tokenFuncionario,
-        corpo: JSON.stringify({ nome: 'Mestre', email: MESTRE.email }),
+        corpo: JSON.stringify({ nome: 'Coordenador', email: COORDENADOR.email }),
     });
 
     const r = await pedido(s.baseUrl, '/api/auth/esqueci-senha', {
-        corpo: JSON.stringify({ email: MESTRE.email }),
+        corpo: JSON.stringify({ email: COORDENADOR.email }),
     });
     assert.equal(r.status, 200);
     assert.equal(r.corpo.linkRedefinicao, undefined, 'o token não pode voltar na resposta');
@@ -312,11 +312,11 @@ test('senha curta é recusada no registro, troca e redefinição', async (t) => 
     });
     assert.equal(curto.status, 400);
 
-    const token = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
     const troca = await pedido(s.baseUrl, '/api/auth/senha', {
         metodo: 'PUT',
         token,
-        corpo: JSON.stringify({ senhaAtual: MESTRE_SENHA, senhaNova: '123' }),
+        corpo: JSON.stringify({ senhaAtual: COORDENADOR_SENHA, senhaNova: '123' }),
     });
     assert.equal(troca.status, 400);
 
@@ -338,7 +338,7 @@ test('token de redefinição só é ecoado na página quando é hex de 64', asyn
     }
 });
 
-const ROTAS_SO_DO_MESTRE = [
+const ROTAS_SO_DO_COORDENADOR = [
     ['GET', '/api/funcionarios'],
     ['POST', '/api/funcionarios'],
     ['PUT', '/api/funcionarios/1'],
@@ -352,7 +352,7 @@ const ROTAS_DE_AUTOATENDIMENTO = [
     ['PUT', '/api/auth/senha'],
 ];
 
-test('funcionário é barrado em toda rota exclusiva do mestre, com ou sem token', async (t) => {
+test('funcionário é barrado em toda rota exclusiva do coordenador, com ou sem token', async (t) => {
     const s = await iniciarApp({ limiteAuth: 1000 });
     t.after(() => s.fechar());
 
@@ -362,7 +362,7 @@ test('funcionário é barrado em toda rota exclusiva do mestre, com ou sem token
     const token = await logar(s.baseUrl, 'ana', 'senha-1234');
     assert.ok(token, 'o funcionário precisa autenticar');
 
-    for (const [metodo, caminho] of ROTAS_SO_DO_MESTRE) {
+    for (const [metodo, caminho] of ROTAS_SO_DO_COORDENADOR) {
         const semToken = await pedido(s.baseUrl, caminho, { metodo, corpo: '{}' });
         assert.equal(semToken.status, 401, `${metodo} ${caminho} sem token deve dar 401`);
 
@@ -397,9 +397,9 @@ test('token forjado é recusado', async (t) => {
 
     const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
     const forjados = [
-        ['alg none', `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: '1', tipo: 'mestre' })}.x`],
-        ['alg none vazio', `${b64({ alg: 'none' })}.${b64({ sub: '1', tipo: 'mestre' })}.x`],
-        ['sem assinatura', `${b64({ alg: 'HS256' })}.${b64({ sub: '1', tipo: 'mestre' })}.`],
+        ['alg none', `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: '1', tipo: 'coordenador' })}.x`],
+        ['alg none vazio', `${b64({ alg: 'none' })}.${b64({ sub: '1', tipo: 'coordenador' })}.x`],
+        ['sem assinatura', `${b64({ alg: 'HS256' })}.${b64({ sub: '1', tipo: 'coordenador' })}.`],
         ['sub nao numerico', `${b64({ alg: 'HS256' })}.${b64({ sub: 'abc' })}x`],
         ['lixo', 'isto-nao-e-um-jwt'],
     ];
@@ -414,7 +414,7 @@ test('token expirado é recusado mesmo com assinatura válida', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const expirado = await new SignJWT({ sub: '1', tipo: 'mestre' })
+    const expirado = await new SignJWT({ sub: '1', tipo: 'coordenador' })
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt(Math.floor(Date.now() / 1000) - 7200)
         .setExpirationTime(Math.floor(Date.now() / 1000) - 3600)
@@ -428,7 +428,7 @@ test('token com assinatura de outro segredo é recusado', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const outro = await new SignJWT({ sub: '1', tipo: 'mestre' })
+    const outro = await new SignJWT({ sub: '1', tipo: 'coordenador' })
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
         .setExpirationTime('12h')
@@ -442,10 +442,10 @@ test('campo de texto acima do limite é truncado em vez de estourar o banco', as
     const s = await iniciarApp({ limiteAuth: 1000 });
     t.after(() => s.fechar());
 
-    const tokenMestre = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const tokenCoordenador = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
     const r = await pedido(s.baseUrl, '/api/funcionarios', {
         metodo: 'POST',
-        token: tokenMestre,
+        token: tokenCoordenador,
         corpo: JSON.stringify({ nome: 'x'.repeat(500), numero: '1', email: 'a@b.com' }),
     });
     assert.equal(r.status, 201);
@@ -456,11 +456,11 @@ test('campos com caractere de controle são recusados', async (t) => {
     const s = await iniciarApp({ limiteAuth: 1000 });
     t.after(() => s.fechar());
 
-    const tokenMestre = await logar(s.baseUrl, MESTRE.usuario, MESTRE_SENHA);
+    const tokenCoordenador = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
     for (const nome of ['Joao Silva', 'Joao Silva', 'Joao\nSilva', 'Joao\tSilva']) {
         const r = await pedido(s.baseUrl, '/api/funcionarios', {
             metodo: 'POST',
-            token: tokenMestre,
+            token: tokenCoordenador,
             corpo: JSON.stringify({ nome, numero: '1', email: 'a@b.com' }),
         });
         assert.equal(r.status, 400, `deveria recusar: ${JSON.stringify(nome)}`);
@@ -499,11 +499,11 @@ test('rate limit bloqueia depois de muitas tentativas', async (t) => {
     assert.ok(respostas.includes(429), 'o limite precisa barrar em algum momento');
     assert.equal(respostas.at(-1), 429);
 
-    const vivo = await pedido(s.baseUrl, '/api/auth/mestre', { metodo: 'GET' });
+    const vivo = await pedido(s.baseUrl, '/api/auth/coordenador', { metodo: 'GET' });
     assert.equal(vivo.status, 200, 'rotas não limitadas continuam funcionando');
 });
 
-test('registros em excesso não travam o login do mestre', async (t) => {
+test('registros em excesso não travam o login do coordenador', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
@@ -517,7 +517,7 @@ test('registros em excesso não travam o login do mestre', async (t) => {
     assert.ok(status.includes(429), 'o cadastro precisa ter o próprio limite');
 
     const login = await pedido(s.baseUrl, '/api/auth/login', {
-        corpo: JSON.stringify({ usuario: MESTRE.usuario, senha: MESTRE_SENHA }),
+        corpo: JSON.stringify({ usuario: COORDENADOR.usuario, senha: COORDENADOR_SENHA }),
     });
     assert.equal(login.status, 200, 'o login não pode ser barrado pelo cadastro em excesso');
 });
@@ -573,88 +573,85 @@ test('esqueci-senha limita a quantidade de envios por IP', async (t) => {
     assert.equal(status, 429, 'nao pode dar para pedir redefinicao sem limite');
 });
 
-test('criarMestre direto no banco normaliza os campos', () => {
+test('criarCoordenador direto no banco normaliza os campos', () => {
     const banco = criarBanco(':memory:');
     try {
-        const mestre = banco.criarMestre('chefe', 'senha-1234', undefined, undefined, null);
-        assert.equal(mestre.tipo, 'mestre');
-        assert.equal(mestre.email, '');
-        assert.equal(banco.existeMestre(), true);
+        const coordenador = banco.criarCoordenador('chefe', 'senha-1234', undefined, undefined, null);
+        assert.equal(coordenador.tipo, 'coordenador');
+        assert.equal(coordenador.email, '');
+        assert.equal(banco.existeCoordenador(), true);
     } finally {
         banco.db.close();
     }
 });
 
-test('duas requisições simultâneas de cadastro do mestre resulta em 201 e 409', async (t) => {
-    const s = await iniciarApp({ comMestre: false, limiteAuth: 1000 });
+test('duas requisições simultâneas de cadastro do coordenador resulta em 201 e 409', async (t) => {
+    const s = await iniciarApp({ comCoordenador: false, limiteAuth: 1000 });
     t.after(() => s.fechar());
 
-    const corpo = { ...MESTRE, usuario: 'mestre-corrida', email: 'corrida@teste.com' };
+    const corpo = { ...COORDENADOR, usuario: 'coordenador-corrida', email: 'corrida@teste.com' };
     const [primeira, segunda] = await Promise.all([
-        pedido(s.baseUrl, '/api/auth/mestre', { corpo: JSON.stringify(corpo) }),
-        pedido(s.baseUrl, '/api/auth/mestre', { corpo: JSON.stringify(corpo) }),
+        pedido(s.baseUrl, '/api/auth/coordenador', { corpo: JSON.stringify(corpo) }),
+        pedido(s.baseUrl, '/api/auth/coordenador', { corpo: JSON.stringify(corpo) }),
     ]);
 
     const criada = primeira.status === 201 ? primeira : segunda;
     const recusada = primeira.status === 201 ? segunda : primeira;
-    assert.equal(criada.status, 201, 'uma requisição precisa criar o mestre');
+    assert.equal(criada.status, 201, 'uma requisição precisa criar o coordenador');
     assert.equal(recusada.status, 409, `a outra precisa ser recusada, veio ${recusada.status}`);
-    assert.equal(s.banco.contarMestres(), 1, 'o banco não pode ficar com dois mestres');
+    assert.equal(s.banco.contarCoordenadores(), 1, 'o banco não pode ficar com dois coordenadors');
     assert.equal(
         recusada.corpo.erro,
-        'O usuário mestre já foi cadastrado. Faça login com ele.',
-        'o 409 não pode revelar se o primeiro Mestre já chegou a logar'
+        'O coordenador já foi cadastrado. Faça login com ele.',
+        'o 409 não pode revelar se o primeiro Coordenador já chegou a logar'
     );
 });
 
-test('o banco recusa um segundo mestre mesmo chamando criarMestre direto', () => {
+test('o banco aceita mais de um coordenador', () => {
     const banco = criarBanco(':memory:');
     try {
-        banco.criarMestre('primeiro', 'senha-1234', 'Primeiro', 'a@teste.com', '1');
-        assert.equal(banco.contarMestres(), 1);
+        banco.criarCoordenador('primeiro', 'senha-1234', 'Primeiro', 'a@teste.com', '1');
+        assert.equal(banco.contarCoordenadores(), 1);
 
-        assert.throws(
-            () => banco.criarMestre('segundo', 'senha-1234', 'Segundo', 'b@teste.com', '2'),
-            /UNIQUE|constraint/i,
-            'o índice único parcial precisa barrar o segundo mestre'
-        );
-        assert.equal(banco.contarMestres(), 1, 'o segundo INSERT não pode ter entrado');
+        banco.criarCoordenador('segundo', 'senha-1234', 'Segundo', 'b@teste.com', '2');
+        assert.equal(banco.contarCoordenadores(), 2, 'o segundo coordenador precisa entrar');
     } finally {
         banco.db.close();
     }
 });
 
-test('funcionários não são barrados pelo índice único de mestre', () => {
+test('vários funcionários convivem com mais de um coordenador', () => {
     const banco = criarBanco(':memory:');
     try {
-        banco.criarMestre('chefe', 'senha-1234', 'Chefe', 'chefe@teste.com', '1');
+        banco.criarCoordenador('chefe', 'senha-1234', 'Chefe', 'chefe@teste.com', '1');
+        banco.criarCoordenador('chefe2', 'senha-1234', 'Chefe 2', 'chefe2@teste.com', '2');
         const f1 = banco.criarFuncionario('Ana Souza', '1', 'ana@teste.com');
         const f2 = banco.criarFuncionario('Bruno Souza', '2', 'bruno@teste.com');
         banco.criarUsuarioLocal('bruno', 'senha-1234', f1.id);
         banco.criarUsuarioLocal('bruno2', 'senha-1234', f2.id);
 
-        assert.equal(banco.contarMestres(), 1, 'continua havendo um só mestre');
+        assert.equal(banco.contarCoordenadores(), 2);
         assert.equal(
             banco.db.prepare("SELECT COUNT(*) AS total FROM usuarios WHERE tipo = 'funcionario'").get().total,
             2,
-            'vários funcionários convivem com o índice'
+            'vários funcionários convivem com os coordenadores'
         );
     } finally {
         banco.db.close();
     }
 });
 
-test('criarMestre pela API entrega token utilizável de uma vez', async (t) => {
-    const s = await iniciarApp({ comMestre: false, limiteAuth: 1000 });
+test('criarCoordenador pela API entrega token utilizável de uma vez', async (t) => {
+    const s = await iniciarApp({ comCoordenador: false, limiteAuth: 1000 });
     t.after(() => s.fechar());
 
-    const corpo = await criarMestre(s.baseUrl);
-    assert.equal(corpo.tipo, 'mestre');
+    const corpo = await criarCoordenador(s.baseUrl);
+    assert.equal(corpo.tipo, 'coordenador');
 
     const eu = await pedido(s.baseUrl, '/api/auth/eu', { metodo: 'GET', token: corpo.token });
     assert.equal(eu.status, 200);
-    assert.equal(eu.corpo.tipo, 'mestre');
+    assert.equal(eu.corpo.tipo, 'coordenador');
 
     const lista = await pedido(s.baseUrl, '/api/funcionarios', { metodo: 'GET', token: corpo.token });
-    assert.equal(lista.status, 200, 'o mestre novo já gerencia funcionários');
+    assert.equal(lista.status, 200, 'o coordenador novo já gerencia funcionários');
 });
