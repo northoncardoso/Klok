@@ -43,7 +43,7 @@ Plano de implementação em `docs/superpowers/plans/`.
 ## Pendências conhecidas (issues abertas)
 
 - #8: prints do app no README.
-- #19: pedido de funcionário com aprovação e aviso ao mestre.
+- #19: pedido de funcionário com aprovação e aviso ao coordenador.
 - #20: limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git).
 
 ## Programa de trabalho em andamento

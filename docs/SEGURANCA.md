@@ -21,7 +21,7 @@ npm test              # 77 testes, 32 deles de ataque
 
 Sem pendência de segurança conhecida no backend. Os achados da auditoria foram
 todos corrigidos: #13 (revogação de JWT), #14 (rate limit por endpoint), #15
-(`nodemailer` 10.x com Helmet) e #16 (unicidade do mestre garantida no banco).
+(`nodemailer` 10.x com Helmet) e #16 (unicidade do coordenador garantida no banco).
 
 A auditoria inteira foi feita com a API real em execução e requisições HTTP de
 verdade, por isso as descrições abaixo trazem o `curl` e a resposta observada, e
@@ -49,7 +49,7 @@ Os testes de segurança vivem em dois arquivos:
 | 9 | Política de senha ausente | médio | parcialmente |
 | 10 | Cadastro de funcionário aberto, sem aprovação | médio | em aberto |
 | 11 | Página de redefinição sem limite de requisições | baixo | corrigido, com teste |
-| 12 | Unicidade do mestre só garantida na aplicação | baixo | corrigido, com teste |
+| 12 | Unicidade do coordenador só garantida na aplicação | baixo | corrigido, com teste |
 
 ---
 
@@ -127,7 +127,7 @@ alto do `nodemailer` 6.10.1 (ver dependências).
 
 Correção: `emailValido()` em `validacao.js` rejeita qualquer caractere de
 controle e exige formato de email. Aplicado no perfil, na recuperação de senha e
-no cadastro do mestre. `email.js` ganhou uma segunda camada, `destinatarioValido()`,
+no cadastro do coordenador. `email.js` ganhou uma segunda camada, `destinatarioValido()`,
 que o próprio serviço de email aplica antes de enviar.
 
 ### 4. Fallback de desenvolvimento virava oráculo (alto)
@@ -159,12 +159,12 @@ avisa no boot se faltar SMTP.
 
 Um único `limitadorAuth` atendia os cinco endpoints de autenticação e o contador
 era por IP. Vinte e duas requisições de registro travavam o login legítimo do
-mestre, reproduzido com o limitador antigo:
+coordenador, reproduzido com o limitador antigo:
 
 ```
 POST /api/auth/registrar x24 -> 201 ate a 21a, 429 a partir da 22a
-POST /api/auth/mestre       -> 201
-POST /api/auth/login        -> 429  (o mestre nem consegue entrar)
+POST /api/auth/coordenador       -> 201
+POST /api/auth/login        -> 429  (o coordenador nem consegue entrar)
 ```
 
 Agora cada rota tem o próprio balde, com janela e teto próprios. O login tem dois
@@ -178,7 +178,7 @@ O limite continua vivendo em memória, então reiniciar o processo zera os balde
 Isso é aceitável enquanto houver uma única instância; com mais de uma, o próximo
 passo é um armazenamento compartilhado (Redis ou a própria tabela do banco).
 
-Testes de regressão: cadastro em excesso não trava o login do mestre, login em
+Testes de regressão: cadastro em excesso não trava o login do coordenador, login em
 excesso devolve 429 com `Retry-After`, a página de redefinição é limitada por IP e
 `esqueci-senha` tem teto de envios.
 
@@ -188,7 +188,7 @@ O token vivia 12 horas, sem `jti` e sem refresh token, então não havia como
 revogá-lo. Reproduzido nos dois caminhos de troca de senha:
 
 ```bash
-TOKEN=$(curl -s -X POST .../api/auth/login -d '{"usuario":"mestre1","senha":"antiga"}' | jq .token)
+TOKEN=$(curl -s -X POST .../api/auth/login -d '{"usuario":"coordenador1","senha":"antiga"}' | jq .token)
 curl -X PUT .../api/auth/senha -H "Authorization: Bearer $TOKEN" \
   -d '{"senhaAtual":"antiga","senhaNova":"nova1234"}'
 # 200, senha trocada
@@ -198,12 +198,12 @@ curl .../api/funcionarios -H "Authorization: Bearer $TOKEN"
 
 O mesmo acontece depois de redefinir pelo email: o token emitido antes do reset
 continua valendo. O app desloga localmente, mas o token segue vivo no servidor, e
-quem o copiou continua com acesso de mestre.
+quem o copiou continua com acesso de coordenador.
 
 Resolvido na issue #13. A coluna `usuarios.senhaVersao` conta as trocas de senha, o
 valor viaja no token como `v`, e o `autenticar` recusa token cujo `v` não bate
 com a versão atual. Trocar ou redefinir a senha passa a derrubar as sessões
-anteriores, inclusive o acesso de mestre.
+anteriores, inclusive o acesso de coordenador.
 
 Um contador de versão foi escolhido no lugar de carimbo de tempo depois que a
 primeira implementação falhou num teste: com `senhaAlteradaEm` em segundos, o
@@ -248,10 +248,10 @@ HTTPS de verdade.
 ### 9. Política de senha (médio, parcialmente resolvido)
 
 `POST /api/auth/registrar` aceitava senha de um caractere, e o `SENHA_MESTRE`
-antigo era `1234`, quatro dígitos que eu confirmei autenticando como mestre.
+antigo era `1234`, quatro dígitos que eu confirmei autenticando como coordenador.
 
 Resolvido agora: mínimo de 4 caracteres no registro, troca, redefinição e no
-cadastro do mestre, e o `SENHA_MESTRE` deixou de existir, então a senha do mestre
+cadastro do coordenador, e o `SENHA_MESTRE` deixou de existir, então a senha do coordenador
 passa a ser a que o usuário digita na primeira tela.
 
 Falta: exigir tamanho maior e alguma complexidade, e travar tentativas de senha
@@ -272,29 +272,24 @@ Cinquenta GETs seguidos em tokens inválidos, todos 200, nenhum 429. Como o toke
 tem 256 bits, forçar é inviável, mas a rota não passa pelo limitador. Resolvido
  junto com o achado 5 (issue #14).
 
-### 12. Unicidade do mestre só garantida na aplicação (baixo, corrigido)
+### 12. Unicidade do coordenador na primeira vez (baixo, regra removida na issue #27)
 
-`POST /api/auth/mestre` checava `existeMestre()` e depois inseria, e a unicidade
-dependia de o controller continuar síncrono.
+`POST /api/auth/coordenador` checa `existeCoordenador()` e depois insere. Como
+`criarCoordenador` não tem `await` entre a checagem e o INSERT, o event loop do
+Node serializa as requisições. Medi removendo o índice e disparando 4 POSTs
+simultâneos 200 vezes, e em nenhuma rodada passou mais de um 201.
 
-Para ser exato sobre o risco: **não era explorável**. `criarMestre` não tem
-`await` entre a checagem e o INSERT, então o event loop do Node serializa as
-requisições. Medi removendo o índice e disparando 4 POSTs simultâneos 200 vezes,
-em nenhuma rodada passou mais de um 201.
+Na issue #16, quando só podia existir um coordenador, a garantia foi reforçada com
+um índice único parcial em `usuarios(tipo) WHERE tipo = 'coordenador'`. A issue
+#27 passou a permitir vários coordenadores, e a migração 6 removeu esse índice. A
+rota pública continua criando apenas o primeiro; os demais entram por
+`POST /api/coordenadores`, com um coordenador autenticado.
 
-Resolvido na issue #16 com um índice único parcial no banco:
-
-```sql
-CREATE UNIQUE INDEX idx_usuarios_mestre ON usuarios(tipo) WHERE tipo = 'mestre';
-```
-
-O índice é parcial de propósito: `UNIQUE` em `tipo` inteiro derrubaria o app,
-porque vários funcionários compartilham `tipo = 'funcionario'`. Isso protege contra
-um `await` introduzido no meio do `if` (refatoração banal que já quebraria a
-garantia) e contra vários processos apontando para o mesmo banco.
-
-O 409 devolvido ao perder a corrida usa a mesma mensagem do 409 por chequeco
-prévio, para não revelar se o primeiro Mestre chegou a logar.
+Risco residual: a rota pública depende de o controller continuar síncrono entre a
+checagem e o INSERT. Se alguém introduzir um `await` nesse trecho, duas
+requisições simultâneas de bootstrap poderiam criar dois coordenadores. O modelo
+agora aceita vários, mas a regra de "só o primeiro pela rota pública" deixaria de
+valer. O teste de concorrência em `ataques.test.js` guarda esse comportamento.
 
 ---
 
@@ -344,7 +339,7 @@ mock.
 Isso foi verificado e continua coberto por teste, para não regredir:
 
 - **Autorização no servidor.** 401 sem token e 403 para funcionário em toda rota
-  de mestre. A interface esconde as telas, mas quem decide é o backend.
+  de coordenador. A interface esconde as telas, mas quem decide é o backend.
 - **Sem IDOR.** Os pontos usam o `funcionarioId` do token, nunca um id do corpo da
   requisição. Não dá para ler ou bater ponto no lugar de outra pessoa.
 - **JWT íntegro.** `jose` com `algorithms: ['HS256']` rejeita `alg=none`,
@@ -358,7 +353,7 @@ Isso foi verificado e continua coberto por teste, para não regredir:
   senha commitada.
 - **Token do app em `expo-secure-store`**, com `secureTextEntry`,
   `autoCapitalize="none"` e `autoCorrect={false}`.
-- **Nenhum segredo do mestre em arquivo.** A senha é escolhida na primeira tela e
+- **Nenhum segredo do coordenador em arquivo.** A senha é escolhida na primeira tela e
   nunca passa por `.env`.
 
 ---

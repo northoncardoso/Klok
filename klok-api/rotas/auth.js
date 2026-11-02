@@ -8,8 +8,8 @@ export function criarRotaAuth(deps) {
     const { limitadores, autenticar } = deps;
     const seguro = asyncHandler;
 
-    rota.get('/mestre', seguro(c.statusMestre));
-    rota.post('/mestre', limitadores.mestre, seguro(c.criarMestre));
+    rota.get('/coordenador', seguro(c.statusCoordenador));
+    rota.post('/coordenador', limitadores.coordenador, seguro(c.criarPrimeiroCoordenador));
     rota.post('/registrar', limitadores.registrar, seguro(c.registrar));
     rota.post('/login', limitadores.loginIp, limitadores.login, seguro(c.login));
     rota.post('/google', limitadores.google, seguro(c.loginGoogle));

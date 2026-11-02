@@ -2,10 +2,11 @@ import express from 'express';
 import helmet from 'helmet';
 import { SignJWT } from 'jose';
 import { OAuth2Client } from 'google-auth-library';
-import { criarAutenticar, criarExigirMestre, criarTratadorDeErros, asyncHandler } from './middlewares.js';
+import { criarAutenticar, criarExigirCoordenador, criarTratadorDeErros, asyncHandler } from './middlewares.js';
 import { criarRotaAuth } from './rotas/auth.js';
 import { criarRotaFuncionarios } from './rotas/funcionarios.js';
 import { criarRotaPontos } from './rotas/pontos.js';
+import { criarRotaCoordenadores } from './rotas/coordenadores.js';
 import { criarControladoresAuth } from './controladores/auth.js';
 import { criarEnviarEmail } from './email.js';
 
@@ -62,7 +63,7 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
         login: criarLimitador({ max: limiteAuth ?? 10, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN, chave: chaveLogin }),
         loginIp: criarLimitador({ max: 60, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN }),
         registrar: criarLimitador({ max: 10, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_CADASTRO }),
-        mestre: criarLimitador({ max: 10, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_CADASTRO }),
+        coordenador: criarLimitador({ max: 10, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_CADASTRO }),
         google: criarLimitador({ max: 20, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
         esqueci: criarLimitador({ max: 5, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
         redefinir: criarLimitador({ max: 20, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
@@ -84,7 +85,7 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     }
 
     const autenticar = criarAutenticar({ banco, segredo: SECRETO });
-    const exigirMestre = criarExigirMestre();
+    const exigirCoordenador = criarExigirCoordenador();
     const enviarEmailFinal =
         enviarEmail ?? criarEnviarEmail();
 
@@ -112,13 +113,14 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
         gerarToken,
         limitadores,
         autenticar,
-        exigirMestre,
+        exigirCoordenador,
         enviarEmail: enviarEmailFinal,
     };
 
     app.use('/api/auth', criarRotaAuth(deps));
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
+    app.use('/api/coordenadores', criarRotaCoordenadores(deps));
     app.get(
         '/redefinir-senha/:token',
         limitadores.paginaRedefinicao,

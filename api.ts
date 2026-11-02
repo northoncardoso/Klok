@@ -2,13 +2,14 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 import type {
+    Coordenador,
+    CoordenadorCriar,
     Funcionario,
     FuncionarioCriar,
-    MestreCriar,
     Ponto,
     RegistroUsuario,
     Sessao,
-    StatusMestre,
+    StatusCoordenador,
     UsuarioInfo,
 } from './types';
 
@@ -41,7 +42,7 @@ export async function lerSessao(): Promise<Sessao | null> {
     } catch {
         dados = null;
     }
-    return { token, ...(dados || {}) };
+    return { token, ...(dados || {}), tipo: dados?.tipo === 'mestre' ? 'coordenador' : dados?.tipo };
 }
 
 export async function limparSessao(): Promise<void> {
@@ -73,9 +74,14 @@ async function requisicao<T>(caminho: string, metodo = 'GET', corpo: unknown = n
 }
 
 export const api = {
-    statusMestre: (): Promise<StatusMestre> => requisicao<StatusMestre>('/api/auth/mestre', 'GET'),
-    criarMestre: (dados: MestreCriar): Promise<Sessao> =>
-        requisicao<Sessao>('/api/auth/mestre', 'POST', dados),
+    statusCoordenador: (): Promise<StatusCoordenador> =>
+        requisicao<StatusCoordenador>('/api/auth/coordenador', 'GET'),
+    criarPrimeiroCoordenador: (dados: CoordenadorCriar): Promise<Sessao> =>
+        requisicao<Sessao>('/api/auth/coordenador', 'POST', dados),
+    listarCoordenadores: (token: string): Promise<Coordenador[]> =>
+        requisicao<Coordenador[]>('/api/coordenadores', 'GET', null, token),
+    criarCoordenador: (dados: CoordenadorCriar, token: string): Promise<Coordenador> =>
+        requisicao<Coordenador>('/api/coordenadores', 'POST', dados, token),
     login: (usuario: string, senha: string): Promise<Sessao> =>
         requisicao<Sessao>('/api/auth/login', 'POST', { usuario, senha }),
     registrar: (usuario: string, senha: string, nome: string): Promise<RegistroUsuario> =>

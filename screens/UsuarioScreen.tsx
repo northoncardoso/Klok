@@ -119,7 +119,7 @@ export default function UsuarioScreen({ token, aoAtualizarNome }: UsuarioScreenP
         <ScrollView style={estilos.containerUsuario}>
             <Text style={estilos.usuarioTitulo}>{dados?.nome}</Text>
             <Text style={estilos.usuarioSubtitulo}>
-                @{dados?.usuario} {dados?.tipo === 'mestre' ? '• Mestre' : '• Funcionário'}
+                @{dados?.usuario} {dados?.tipo === 'coordenador' ? '• Coordenador' : '• Funcionário'}
             </Text>
 
             <View style={estilos.usuarioCartao}>

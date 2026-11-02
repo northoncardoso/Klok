@@ -1,4 +1,4 @@
-export type Papel = 'mestre' | 'funcionario';
+export type Papel = 'coordenador' | 'funcionario';
 
 export type Sessao = {
     token: string;
@@ -33,15 +33,24 @@ export type RegistroUsuario = {
     mensagem: string;
 };
 
-export type StatusMestre = {
+export type StatusCoordenador = {
     cadastrado: boolean;
 };
 
-export type MestreCriar = {
+export type CoordenadorCriar = {
     usuario: string;
     senha: string;
+    nome?: string;
     email: string;
     numero: string;
+};
+
+export type Coordenador = {
+    id: number;
+    usuario: string;
+    nome: string;
+    numero: string;
+    email: string;
 };
 
 export type UsuarioInfo = {

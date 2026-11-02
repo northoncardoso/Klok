@@ -3,14 +3,14 @@ import { criarApp } from '../app.js';
 
 process.env.JWT_SECRET ??= 'segredo-de-teste';
 
-export const MESTRE = {
-    usuario: 'mestre',
-    senha: 'senha-mestre-teste',
-    email: 'mestre@klok.app',
+export const COORDENADOR = {
+    usuario: 'coordenador',
+    senha: 'senha-coordenador-teste',
+    email: 'coordenador@klok.app',
     numero: '11999999999',
 };
 
-export const MESTRE_SENHA = MESTRE.senha;
+export const COORDENADOR_SENHA = COORDENADOR.senha;
 
 export async function iniciarApp(opcoes = {}) {
     const banco = criarBanco(':memory:');
@@ -27,7 +27,7 @@ export async function iniciarApp(opcoes = {}) {
     await new Promise((resolve) => servidor.once('listening', resolve));
     const baseUrl = `http://127.0.0.1:${servidor.address().port}`;
 
-    if (opcoes.comMestre !== false) await criarMestre(baseUrl);
+    if (opcoes.comCoordenador !== false) await criarCoordenador(baseUrl);
 
     return {
         banco,
@@ -39,11 +39,11 @@ export async function iniciarApp(opcoes = {}) {
     };
 }
 
-export async function criarMestre(baseUrl, dados = {}) {
-    const resp = await fetch(`${baseUrl}/api/auth/mestre`, {
+export async function criarCoordenador(baseUrl, dados = {}) {
+    const resp = await fetch(`${baseUrl}/api/auth/coordenador`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...MESTRE, ...dados }),
+        body: JSON.stringify({ ...COORDENADOR, ...dados }),
     });
     return resp.json();
 }

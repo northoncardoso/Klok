@@ -1,5 +1,5 @@
 import { jwtVerify } from 'jose';
-import { PAPEL_MESTRE } from './constantes.js';
+import { PAPEL_COORDENADOR } from './constantes.js';
 
 function tokenAnteriorATrocaDeSenha(payload, usuario) {
     const versaoDoToken = Number(payload.v) || 0;
@@ -28,10 +28,10 @@ export function criarAutenticar({ banco, segredo }) {
     };
 }
 
-export function criarExigirMestre() {
-    return function exigirMestre(req, res, next) {
-        if (req.usuario.tipo !== PAPEL_MESTRE) {
-            return res.status(403).json({ erro: 'Acesso restrito ao mestre' });
+export function criarExigirCoordenador() {
+    return function exigirCoordenador(req, res, next) {
+        if (req.usuario.tipo !== PAPEL_COORDENADOR) {
+            return res.status(403).json({ erro: 'Acesso restrito ao coordenador' });
         }
         next();
     };

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { iniciarApp, logar, MESTRE_SENHA } from './helpers.js';
+import { iniciarApp, logar, COORDENADOR_SENHA } from './helpers.js';
 
 async function criarFuncionarioLogado(s, usuario) {
     await fetch(`${s.baseUrl}/api/auth/registrar`, {
@@ -45,11 +45,11 @@ test('funcionario bate ponto e vê o próprio histórico', async (t) => {
     assert.equal(historico[0].id, ponto.id);
 });
 
-test('mestre vê pontos de todos com nome do funcionario', async (t) => {
+test('coordenador vê pontos de todos com nome do funcionario', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
     const tokenFunc = await criarFuncionarioLogado(s, 'ponto2');
-    const tokenMestre = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
+    const tokenCoordenador = await logar(s.baseUrl, 'coordenador', COORDENADOR_SENHA);
 
     await fetch(`${s.baseUrl}/api/pontos`, {
         method: 'POST',
@@ -58,7 +58,7 @@ test('mestre vê pontos de todos com nome do funcionario', async (t) => {
     });
 
     const resp = await fetch(`${s.baseUrl}/api/pontos`, {
-        headers: { authorization: `Bearer ${tokenMestre}` },
+        headers: { authorization: `Bearer ${tokenCoordenador}` },
     });
     assert.equal(resp.status, 200);
     const todos = await resp.json();
@@ -66,10 +66,10 @@ test('mestre vê pontos de todos com nome do funcionario', async (t) => {
     assert.ok(todos.some((p) => p.funcionarioNome === 'ponto2'));
 });
 
-test('mestre sem funcionário vinculado não consegue bater ponto', async (t) => {
+test('coordenador sem funcionário vinculado não consegue bater ponto', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    const token = await logar(s.baseUrl, 'mestre', MESTRE_SENHA);
+    const token = await logar(s.baseUrl, 'coordenador', COORDENADOR_SENHA);
 
     const resp = await fetch(`${s.baseUrl}/api/pontos`, {
         method: 'POST',

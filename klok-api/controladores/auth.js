@@ -7,24 +7,12 @@ import {
     senha as senhaDe,
     texto,
 } from '../validacao.js';
+import { MINIMO_SENHA, validarNovoCoordenador } from './coordenadores.js';
 
-const MINIMO_SENHA = 4;
 const TOKEN_HEX = /^[0-9a-f]{64}$/;
 
 function smtpCompleto() {
     return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-}
-
-// Distingue "já existe mestre" de qualquer outra falha de banco, para não
-// esconder bug real atrás de um 409. O SQLite reporta violação de restrição
-// como SQLITE_CONSTRAINT_UNIQUE (2067) ou SQLITE_CONSTRAINT (19).
-function jaExisteMestre(erro) {
-    const codigo = String(erro?.errcode ?? erro?.code ?? '');
-    return (
-        codigo.includes('2067') ||
-        codigo.includes('CONSTRAINT_UNIQUE') ||
-        (codigo.includes('19') && /usuarios_mestre/i.test(String(erro?.message ?? '')))
-    );
 }
 
 function ehProducao() {
@@ -41,52 +29,22 @@ function escaparHtml(valor) {
 }
 
 export function criarControladoresAuth({ banco, gerarToken, googleClient, enviarEmail }) {
-    function statusMestre(req, res) {
-        res.json({ cadastrado: banco.existeMestre() });
+    function statusCoordenador(req, res) {
+        res.json({ cadastrado: banco.existeCoordenador() });
     }
 
-    async function criarMestre(req, res) {
-        if (banco.existeMestre()) {
+    async function criarPrimeiroCoordenador(req, res) {
+        if (banco.existeCoordenador()) {
             return res.status(409).json({
-                erro: 'O usuário mestre já foi cadastrado. Faça login com ele.',
+                erro: 'O coordenador já foi cadastrado. Faça login com ele.',
             });
         }
-        const usuarioLimpo = texto(req.body?.usuario, 'usuario');
-        const senhaLimpa = senhaDe(req.body?.senha);
-        const emailLimpo = emailNormalizado(req.body?.email);
-        const numeroLimpo = texto(req.body?.numero, 'numero');
-
-        if (!usuarioLimpo || !semCaractereDeControle(usuarioLimpo)) {
-            return res.status(400).json({ erro: 'Informe um nome de usuário válido' });
+        const resultado = validarNovoCoordenador(banco, req.body);
+        if (resultado.erro) {
+            return res.status(resultado.status).json({ erro: resultado.erro });
         }
-        if (senhaLimpa.length < MINIMO_SENHA) {
-            return res.status(400).json({ erro: `A senha do mestre deve ter ao menos ${MINIMO_SENHA} caracteres` });
-        }
-        if (!emailValido(emailLimpo)) {
-            return res.status(400).json({ erro: 'Informe um email válido para o mestre' });
-        }
-        if (!numeroLimpo || !semCaractereDeControle(numeroLimpo)) {
-            return res.status(400).json({ erro: 'Informe o número de celular do mestre' });
-        }
-        if (banco.buscarUsuarioPorLogin(usuarioLimpo)) {
-            return res.status(409).json({ erro: 'Este nome de usuário já está em uso' });
-        }
-
-        let criado;
-        try {
-            criado = banco.criarMestre(usuarioLimpo, senhaLimpa, usuarioLimpo, emailLimpo, numeroLimpo);
-        } catch (erro) {
-            // O índice único parcial em usuarios(tipo) é quem garante a
-            // unicidade de verdade: a checagem acima pode ser corrida por duas
-            // requisições simultâneas, o banco não deixa passar.
-            if (jaExisteMestre(erro)) {
-                return res.status(409).json({
-                    erro: 'O usuário mestre já foi cadastrado. Faça login com ele.',
-                });
-            }
-            throw erro;
-        }
-
+        const { usuario, senha, nome, email, numero } = resultado.dados;
+        const criado = banco.criarCoordenador(usuario, senha, nome, email, numero);
         const token = await gerarToken(criado);
         res.status(201).json({ token, tipo: criado.tipo, nome: criado.usuario, id: criado.id });
     }
@@ -287,5 +245,5 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         res.json({ sucesso: true, mensagem: 'Senha redefinida com sucesso. Faça login com a nova senha.' });
     }
 
-    return { statusMestre, criarMestre, registrar, login, loginGoogle, eu, atualizarDados, alterarSenha, esqueciSenha, paginaRedefinicao, redefinirSenha };
+    return { statusCoordenador, criarPrimeiroCoordenador, registrar, login, loginGoogle, eu, atualizarDados, alterarSenha, esqueciSenha, paginaRedefinicao, redefinirSenha };
 }

@@ -15,11 +15,11 @@ import InputSenha from '../InputSenha';
 import { api, salvarSessao, mensagemDeErro } from '../api';
 import type { Sessao } from '../types';
 
-type CriarMestreScreenProps = {
+type CriarCoordenadorScreenProps = {
     aoEntrar: (dados: Sessao) => void;
 };
 
-export default function CriarMestreScreen({ aoEntrar }: CriarMestreScreenProps) {
+export default function CriarCoordenadorScreen({ aoEntrar }: CriarCoordenadorScreenProps) {
     const [usuario, setUsuario] = useState('');
     const [senha, setSenha] = useState('');
     const [email, setEmail] = useState('');
@@ -42,7 +42,7 @@ export default function CriarMestreScreen({ aoEntrar }: CriarMestreScreenProps) 
 
         setSalvando(true);
         try {
-            const dados = await api.criarMestre({
+            const dados = await api.criarPrimeiroCoordenador({
                 usuario: usuario.trim(),
                 senha,
                 email: email.trim(),
@@ -68,19 +68,18 @@ export default function CriarMestreScreen({ aoEntrar }: CriarMestreScreenProps) 
                 showsVerticalScrollIndicator={false}
             >
                 <Text style={estilos.estilosLoginTitulo}>Klok</Text>
-                <Text style={estilos.estilosLoginSubtitulo}>Cadastre o usuário mestre</Text>
+                <Text style={estilos.estilosLoginSubtitulo}>Cadastre o usuário coordenador</Text>
 
-                <View style={estilos.estilosMestreAviso}>
-                    <Text style={estilos.estilosMestreAvisoTexto}>
-                        Antes de usar o app, cadastre o usuário mestre. Ele é único, não pode ser
-                        criado de novo e será reutilizado por você sempre que precisar gerenciar os
-                        funcionários do Klok. Guarde bem o usuário e a senha: eles são a sua chave de
-                        acesso e não há como recuperá-los.
+                <View style={estilos.estilosCoordenadorAviso}>
+                    <Text style={estilos.estilosCoordenadorAvisoTexto}>
+                        Antes de usar o app, cadastre o primeiro coordenador. Depois, outros
+                        coordenadores podem ser criados dentro do app, na tela de Coordenadores. Guarde
+                        bem o usuário e a senha: eles são a sua chave de acesso.
                     </Text>
                 </View>
 
                 <TextInput
-                    placeholder="Nome de usuário mestre"
+                    placeholder="Nome de usuário do coordenador"
                     value={usuario}
                     onChangeText={setUsuario}
                     style={estilos.estilosLoginInput}
@@ -117,12 +116,12 @@ export default function CriarMestreScreen({ aoEntrar }: CriarMestreScreenProps) 
                 />
 
                 <TouchableOpacity
-                    style={estilos.estilosMestreBotao}
+                    style={estilos.estilosCoordenadorBotao}
                     onPress={cadastrar}
                     disabled={salvando}
                 >
                     <Text style={estilos.estilosLoginTextoBotao}>
-                        {salvando ? 'Cadastrando...' : 'Cadastrar mestre'}
+                        {salvando ? 'Cadastrando...' : 'Cadastrar coordenador'}
                     </Text>
                 </TouchableOpacity>
             </ScrollView>
