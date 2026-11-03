@@ -117,6 +117,12 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
         enviarEmail: enviarEmailFinal,
     };
 
+    // Injecao temporaria ate o login resolver o banco da empresa pelo codigo.
+    app.use('/api', (req, res, next) => {
+        req.banco = banco;
+        next();
+    });
+
     app.use('/api/auth', criarRotaAuth(deps));
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
