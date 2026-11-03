@@ -5,11 +5,16 @@ import { api, mensagemDeErro } from '../api';
 import estilos from '../estilos';
 
 type FormularioRecuperarSenhaProps = {
+    empresa: string;
     onVoltar: () => void;
     onEnviado?: () => void;
 };
 
-export default function FormularioRecuperarSenha({ onVoltar, onEnviado }: FormularioRecuperarSenhaProps) {
+export default function FormularioRecuperarSenha({
+    empresa,
+    onVoltar,
+    onEnviado,
+}: FormularioRecuperarSenhaProps) {
     const [email, setEmail] = useState('');
     const [enviando, setEnviando] = useState(false);
 
@@ -18,9 +23,13 @@ export default function FormularioRecuperarSenha({ onVoltar, onEnviado }: Formul
             Alert.alert('Atenção', 'Informe seu email.');
             return;
         }
+        if (!empresa) {
+            Alert.alert('Atenção', 'Volte e informe o código da empresa.');
+            return;
+        }
         setEnviando(true);
         try {
-            await api.esqueciSenha(email.trim());
+            await api.esqueciSenha(empresa, email.trim());
             Alert.alert(
                 'Email enviado',
                 'Se este email estiver cadastrado, você receberá um link para redefinir a senha.'

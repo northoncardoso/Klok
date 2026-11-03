@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="referrer" content="no-referrer" />
+        <title>Klok Admin</title>
+        <link rel="stylesheet" href="/admin/admin.css" />
+        <script src="/admin/admin.js" defer></script>
+    </head>
+    <body>
+        <header class="topo">
+            <h1>Klok Admin</h1>
+            <button id="botao-sair" class="secundario" type="button" hidden>Sair</button>
+        </header>
+
+        <main>
+            <section id="bloco-login" class="cartao">
+                <h2>Entrar</h2>
+                <p class="dica">Acesso restrito ao admin da KLOK.</p>
+                <form id="form-login" class="formulario">
+                    <label for="login-usuario">Usuário</label>
+                    <input id="login-usuario" name="usuario" autocomplete="username" required />
+
+                    <label for="login-senha">Senha</label>
+                    <input
+                        id="login-senha"
+                        name="senha"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                    />
+
+                    <button type="submit">Entrar</button>
+                </form>
+                <p id="mensagem-login" class="mensagem" role="alert"></p>
+            </section>
+
+            <section id="bloco-painel" hidden>
+                <div class="cartao">
+                    <h2>Empresas</h2>
+                    <p class="dica">Cada empresa tem o próprio banco de dados.</p>
+
+                    <div class="tabela-rolagem">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nome</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-empresas"></tbody>
+                        </table>
+                    </div>
+
+                    <h3>Nova empresa</h3>
+                    <p class="dica">Etapa 1 de 2: código e nome. O coordenador entra na etapa 2.</p>
+                    <form id="form-empresa" class="formulario">
+                        <label for="empresa-codigo">Código</label>
+                        <input
+                            id="empresa-codigo"
+                            name="codigo"
+                            maxlength="20"
+                            autocapitalize="characters"
+                            placeholder="ACME"
+                            required
+                        />
+
+                        <label for="empresa-nome">Nome</label>
+                        <input id="empresa-nome" name="nome" maxlength="120" required />
+
+                        <button type="submit">Criar empresa</button>
+                    </form>
+                    <p id="mensagem-empresas" class="mensagem" role="alert"></p>
+                </div>
+
+                <div id="bloco-empresa" class="cartao" hidden>
+                    <h2 id="empresa-titulo"></h2>
+                    <p class="dica">Código: <strong id="empresa-codigo-atual"></strong></p>
+                    <p class="dica">Status: <strong id="empresa-status"></strong></p>
+
+                    <form id="form-renomear" class="formulario">
+                        <label for="empresa-nome-atual">Nome</label>
+                        <input id="empresa-nome-atual" name="nome" maxlength="120" required />
+                        <button type="submit">Salvar nome</button>
+                    </form>
+
+                    <button id="botao-status" class="secundario" type="button"></button>
+
+                    <h3>Primeiro coordenador</h3>
+                    <p class="dica">
+                        Etapa 2 de 2: crie o acesso do coordenador desta empresa. Ele já entra no app
+                        com o código da empresa.
+                    </p>
+                    <form id="form-coordenador" class="formulario">
+                        <label for="coord-usuario">Usuário</label>
+                        <input id="coord-usuario" name="usuario" autocomplete="off" required />
+
+                        <label for="coord-senha">Senha</label>
+                        <input
+                            id="coord-senha"
+                            name="senha"
+                            type="password"
+                            autocomplete="new-password"
+                            minlength="6"
+                            required
+                        />
+
+                        <label for="coord-nome">Nome</label>
+                        <input id="coord-nome" name="nome" maxlength="120" />
+
+                        <label for="coord-email">Email</label>
+                        <input id="coord-email" name="email" type="email" maxlength="160" />
+
+                        <label for="coord-numero">Número</label>
+                        <input id="coord-numero" name="numero" maxlength="40" />
+
+                        <button type="submit">Criar coordenador</button>
+                    </form>
+                    <p id="mensagem-empresa" class="mensagem" role="alert"></p>
+                </div>
+            </section>
+        </main>
+    </body>
+</html>

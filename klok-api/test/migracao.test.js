@@ -103,3 +103,16 @@ test('atualizar senha incrementa a versão e mantém a sessão antiga revogada',
     assert.ok(banco.validarSenha('terceira-senha-8', depois.senhaHash) === null, 'o hash antigo não vale mais');
     banco.db.close();
 });
+
+test('migração 7 cria a coluna empresa e grava nos usuários', () => {
+    const banco = criarBanco(':memory:', { empresa: 'ACME' });
+    assert.equal(banco.userVersion(), MIGRACOES.length);
+    const coluna = banco.db
+        .prepare("SELECT name FROM pragma_table_info('usuarios') WHERE name = 'empresa'")
+        .get();
+    assert.equal(coluna.name, 'empresa');
+
+    const coordenador = banco.criarCoordenador('chefe', 'senha-1234', 'Chefe', 'c@acme.com', '1');
+    assert.equal(coordenador.empresa, 'ACME');
+    assert.equal(banco.criarUsuarioLocal('ana', 'senha-1234', 'Ana').empresa, 'ACME');
+});

@@ -1,61 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { iniciarApp, criarCoordenador, logar, COORDENADOR, COORDENADOR_SENHA } from './helpers.js';
+import { iniciarApp, logar, COORDENADOR, COORDENADOR_SENHA, EMPRESA } from './helpers.js';
 
-test('GET /api/auth/coordenador responde cadastrado false antes do primeiro acesso', async (t) => {
-    const s = await iniciarApp({ comCoordenador: false });
-    t.after(() => s.fechar());
-
-    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`);
-    assert.equal(resp.status, 200);
-    assert.deepEqual(await resp.json(), { cadastrado: false });
-});
-
-test('cadastrar o coordenador cria o usuário, devolve token de coordenador e já autentica', async (t) => {
-    const s = await iniciarApp({ comCoordenador: false });
-    t.after(() => s.fechar());
-
-    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(COORDENADOR),
-    });
-    assert.equal(resp.status, 201);
-    const corpo = await resp.json();
-    assert.equal(corpo.tipo, 'coordenador');
-    assert.ok(corpo.token, 'deve devolver token para entrar direto no app');
-
-    const status = await (await fetch(`${s.baseUrl}/api/auth/coordenador`)).json();
-    assert.equal(status.cadastrado, true);
-
-    const guardado = s.banco.db
-        .prepare('SELECT usuario, senhaHash, tipo, email, numero FROM usuarios WHERE usuario = ?')
-        .get(COORDENADOR.usuario);
-    assert.equal(guardado.tipo, 'coordenador');
-    assert.ok(guardado.senhaHash.startsWith('scrypt$'), 'senha deve ser guardada com salt');
-    assert.equal(guardado.email, COORDENADOR.email);
-    assert.equal(guardado.numero, COORDENADOR.numero);
-
-    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR.senha);
-    assert.ok(token, 'o coordenador deve conseguir fazer login com a senha escolhida');
-});
-
-test('a rota pública só cria o primeiro coordenador', async (t) => {
-    const s = await iniciarApp();
-    t.after(() => s.fechar());
-
-    const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...COORDENADOR, usuario: 'outro-coordenador' }),
-    });
-    assert.equal(resp.status, 409);
-    assert.equal(
-        s.banco.buscarUsuarioPorLogin('outro-coordenador'),
-        undefined,
-        'o primeiro coordenador entra pela rota pública; os demais, pela rota autenticada'
-    );
-});
+function criarFuncionario(s, usuario, senha = '123456', nome = usuario) {
+    return s.banco.criarUsuarioLocal(usuario, senha, nome);
+}
 
 test('coordenador autenticado cadastra e lista outro coordenador', async (t) => {
     const s = await iniciarApp();
@@ -92,11 +41,7 @@ test('coordenador autenticado cadastra e lista outro coordenador', async (t) => 
 test('funcionário não lista nem cadastra coordenador', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'ana', senha: '123456' }),
-    });
+    criarFuncionario(s, 'ana');
     const token = await logar(s.baseUrl, 'ana', '123456');
 
     const lista = await fetch(`${s.baseUrl}/api/coordenadores`, {
@@ -125,95 +70,51 @@ test('novo coordenador com usuário já em uso retorna 409', async (t) => {
     assert.equal(resp.status, 409);
 });
 
-test('cadastro do coordenador exige usuário, senha, email e número', async (t) => {
-    const s = await iniciarApp({ comCoordenador: false });
-    t.after(() => s.fechar());
-
-    const invalidos = [
-        { ...COORDENADOR, usuario: '  ' },
-        { ...COORDENADOR, senha: '' },
-        { ...COORDENADOR, senha: '123' },
-        { ...COORDENADOR, email: '' },
-        { ...COORDENADOR, email: 'sem-arroba' },
-        { ...COORDENADOR, numero: '' },
-    ];
-
-    for (const corpo of invalidos) {
-        const resp = await fetch(`${s.baseUrl}/api/auth/coordenador`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(corpo),
-        });
-        assert.equal(resp.status, 400, `esperava 400 para ${JSON.stringify(corpo)}`);
-    }
-
-    assert.equal(s.banco.existeCoordenador(), false, 'nenhum coordenador deve ter sido criado');
-});
-
 test('email e número do coordenador reaparecem no próprio perfil', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
     const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
-    const eu = await (await fetch(`${s.baseUrl}/api/auth/eu`, {
-        headers: { authorization: `Bearer ${token}` },
-    })).json();
+    const eu = await (
+        await fetch(`${s.baseUrl}/api/auth/eu`, {
+            headers: { authorization: `Bearer ${token}` },
+        })
+    ).json();
 
     assert.equal(eu.tipo, 'coordenador');
+    assert.equal(eu.empresa, EMPRESA);
     assert.equal(eu.email, COORDENADOR.email);
     assert.equal(eu.numero, COORDENADOR.numero);
 });
 
-test('registro de usuário e login local devolvem token', async (t) => {
-    const s = await iniciarApp();
-    t.after(() => s.fechar());
-
-    const reg = await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'ana', senha: '123456', nome: 'Ana Silva' }),
-    });
-    assert.equal(reg.status, 201);
-
-    const login = await fetch(`${s.baseUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'ana', senha: '123456' }),
-    });
-    assert.equal(login.status, 200);
-    const corpo = await login.json();
-    assert.ok(corpo.token, 'token deve estar presente');
-    assert.equal(corpo.tipo, 'funcionario');
-});
-
-test('registro sem usuário ou senha retorna 400', async (t) => {
+test('o autocadastro está fechado e não cria usuário', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
     const resp = await fetch(`${s.baseUrl}/api/auth/registrar`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: '', senha: '' }),
+        body: JSON.stringify({ empresa: EMPRESA, usuario: 'ana', senha: '123456' }),
     });
-    assert.equal(resp.status, 400);
+    assert.equal(resp.status, 403);
+    assert.match((await resp.json()).erro, /temporariamente fechado/i);
+    assert.equal(s.banco.buscarUsuarioPorLogin('ana'), undefined);
 });
 
-test('registro com usuário duplicado retorna 409', async (t) => {
+test('login local devolve token de empresa', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
+    criarFuncionario(s, 'ana', '123456', 'Ana Silva');
 
-    const corpo = { usuario: 'duplicado', senha: '123456' };
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
+    const login = await fetch(`${s.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(corpo),
+        body: JSON.stringify({ empresa: EMPRESA, usuario: 'ana', senha: '123456' }),
     });
-    const duplicado = await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(corpo),
-    });
-    assert.equal(duplicado.status, 409);
+    assert.equal(login.status, 200);
+    const corpo = await login.json();
+    assert.ok(corpo.token, 'token deve estar presente');
+    assert.equal(corpo.tipo, 'funcionario');
 });
 
 test('login com senha errada retorna 401', async (t) => {
@@ -223,7 +124,7 @@ test('login com senha errada retorna 401', async (t) => {
     const resp = await fetch(`${s.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'coordenador', senha: 'senha-errada' }),
+        body: JSON.stringify({ empresa: EMPRESA, usuario: 'coordenador', senha: 'senha-errada' }),
     });
     assert.equal(resp.status, 401);
 });
@@ -245,7 +146,7 @@ test('rate limit bloqueia login após muitas tentativas', async (t) => {
         const resp = await fetch(`${s.baseUrl}/api/auth/login`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ usuario: 'coordenador', senha: 'senha-errada' }),
+            body: JSON.stringify({ empresa: EMPRESA, usuario: 'coordenador', senha: 'senha-errada' }),
         });
         ultimo = resp.status;
     }
@@ -263,11 +164,7 @@ test('GET /api/auth/eu sem token retorna 401', async (t) => {
 test('GET /api/auth/eu com token retorna dados do usuário', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'bia', senha: '123456' }),
-    });
+    criarFuncionario(s, 'bia');
     const token = await logar(s.baseUrl, 'bia', '123456');
 
     const resp = await fetch(`${s.baseUrl}/api/auth/eu`, {
@@ -291,7 +188,7 @@ test('login com Google cria usuário e reutiliza em login seguinte', async (t) =
     const primeira = await fetch(`${s.baseUrl}/api/auth/google`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ idToken: 'token-fake' }),
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-fake' }),
     });
     assert.equal(primeira.status, 200);
     const corpo1 = await primeira.json();
@@ -302,7 +199,7 @@ test('login com Google cria usuário e reutiliza em login seguinte', async (t) =
     const segunda = await fetch(`${s.baseUrl}/api/auth/google`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ idToken: 'token-fake' }),
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-fake' }),
     });
     assert.equal(segunda.status, 200);
     const corpo2 = await segunda.json();
@@ -316,7 +213,7 @@ test('login Google sem idToken retorna 400', async (t) => {
     const resp = await fetch(`${s.baseUrl}/api/auth/google`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ empresa: EMPRESA }),
     });
     assert.equal(resp.status, 400);
 });
@@ -324,11 +221,7 @@ test('login Google sem idToken retorna 400', async (t) => {
 test('GET /api/auth/eu devolve dados do perfil', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'carla', senha: '123456', nome: 'Carla Dias' }),
-    });
+    criarFuncionario(s, 'carla', '123456', 'Carla Dias');
     const token = await logar(s.baseUrl, 'carla', '123456');
 
     const resp = await fetch(`${s.baseUrl}/api/auth/eu`, {
@@ -339,17 +232,13 @@ test('GET /api/auth/eu devolve dados do perfil', async (t) => {
     assert.equal(corpo.nome, 'Carla Dias');
     assert.equal(corpo.usuario, 'carla');
     assert.equal(corpo.hasSenha, true);
-    assert.ok(corpo.funcionarioId != null, 'registro local cria funcionário vinculado');
+    assert.ok(corpo.funcionarioId != null, 'usuário local tem funcionário vinculado');
 });
 
 test('PUT /api/auth/eu atualiza os dados do usuário', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'duda', senha: '123456', nome: 'Duda' }),
-    });
+    criarFuncionario(s, 'duda', '123456', 'Duda');
     const token = await logar(s.baseUrl, 'duda', '123456');
 
     const resp = await fetch(`${s.baseUrl}/api/auth/eu`, {
@@ -383,11 +272,7 @@ test('coordenador também atualiza dados próprios pelo perfil', async (t) => {
 test('senha atual incorreta retorna 401 e não altera a senha', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'eva', senha: '123456' }),
-    });
+    criarFuncionario(s, 'eva');
     const token = await logar(s.baseUrl, 'eva', '123456');
 
     const err = await fetch(`${s.baseUrl}/api/auth/senha`, {
@@ -400,7 +285,7 @@ test('senha atual incorreta retorna 401 e não altera a senha', async (t) => {
     const loginAntigo = await fetch(`${s.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'eva', senha: '123456' }),
+        body: JSON.stringify({ empresa: EMPRESA, usuario: 'eva', senha: '123456' }),
     });
     assert.equal(loginAntigo.status, 200, 'senha antiga continua valendo');
 });
@@ -408,11 +293,7 @@ test('senha atual incorreta retorna 401 e não altera a senha', async (t) => {
 test('trocar senha funciona e a nova passa a valer', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'fabi', senha: '123456' }),
-    });
+    criarFuncionario(s, 'fabi');
     const token = await logar(s.baseUrl, 'fabi', '123456');
 
     const ok = await fetch(`${s.baseUrl}/api/auth/senha`, {
@@ -425,14 +306,14 @@ test('trocar senha funciona e a nova passa a valer', async (t) => {
     const antiga = await fetch(`${s.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'fabi', senha: '123456' }),
+        body: JSON.stringify({ empresa: EMPRESA, usuario: 'fabi', senha: '123456' }),
     });
     assert.equal(antiga.status, 401, 'senha antiga deixa de valer');
 
     const nova = await fetch(`${s.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'fabi', senha: 'nova-senha-1' }),
+        body: JSON.stringify({ empresa: EMPRESA, usuario: 'fabi', senha: 'nova-senha-1' }),
     });
     assert.equal(nova.status, 200, 'nova senha passa a valer');
 });
@@ -440,11 +321,7 @@ test('trocar senha funciona e a nova passa a valer', async (t) => {
 test('nova senha igual à atual retorna 400', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'gabi', senha: '123456' }),
-    });
+    criarFuncionario(s, 'gabi');
     const token = await logar(s.baseUrl, 'gabi', '123456');
 
     const resp = await fetch(`${s.baseUrl}/api/auth/senha`, {

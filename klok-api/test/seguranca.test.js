@@ -20,11 +20,10 @@ test('criarBanco não semeia nenhum coordenador e não exige SENHA_MESTRE', () =
 });
 
 test('criarApp falha sem JWT_SECRET', () => {
-    const banco = criarBanco(':memory:');
     const antes = process.env.JWT_SECRET;
     delete process.env.JWT_SECRET;
     try {
-        assert.throws(() => criarApp({ banco }), /JWT_SECRET/);
+        assert.throws(() => criarApp({}), /JWT_SECRET/);
     } finally {
         process.env.JWT_SECRET = antes;
     }
@@ -34,12 +33,7 @@ test('senha é armazenada com salt e timestamping seguro não quebra login', asy
     const s = await iniciarApp();
     t.after(() => s.fechar());
 
-    const reg = await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario: 'comsalt', senha: 'minha-senha-1' }),
-    });
-    assert.equal(reg.status, 201);
+    s.banco.criarUsuarioLocal('comsalt', 'minha-senha-1', 'Com Salt');
 
     const guardado = s.banco.db
         .prepare('SELECT senhaHash FROM usuarios WHERE usuario = ?')
@@ -57,8 +51,8 @@ test('login com hash legado sha256 migra para hash com salt', async (t) => {
 
     const hashAntigo = createHash('sha256').update('senha-velha').digest('hex');
     s.banco.db.prepare(
-        'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId) VALUES (?, ?, ?, NULL)'
-    ).run('legado', hashAntigo, 'funcionario');
+        'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, empresa) VALUES (?, ?, ?, NULL, ?)'
+    ).run('legado', hashAntigo, 'funcionario', 'TESTE');
 
     const token = await logar(s.baseUrl, 'legado', 'senha-velha');
     assert.ok(token, 'usuário legado deve autenticar');

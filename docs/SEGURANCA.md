@@ -16,7 +16,7 @@ quebra.
 ```bash
 cd klok-api
 mise use node@22      # o projeto exige Node 22.5+ (node:sqlite)
-npm test              # 77 testes, 32 deles de ataque
+npm test              # 99 testes, 33 deles de ataque
 ```
 
 Sem pendência de segurança conhecida no backend. Os achados da auditoria foram
@@ -29,8 +29,10 @@ não só a leitura do código.
 
 Os testes de segurança vivem em dois arquivos:
 
-- `test/ataques.test.js`: 32 testes de simulação de ataque, que cobrem as correções.
+- `test/ataques.test.js`: 33 testes de simulação de ataque, que cobrem as correções.
 - `test/seguranca.test.js`: 4 testes de garantias de base (hash com sal, variáveis de ambiente).
+
+O isolamento entre empresas tem suíte própria em `test/isolamento.test.js`.
 
 ---
 
@@ -47,7 +49,7 @@ Os testes de segurança vivem em dois arquivos:
 | 7 | Token de redefinição viaja na URL | médio | parcialmente |
 | 8 | API sem TLS e sem headers de segurança | médio | parcialmente |
 | 9 | Política de senha ausente | médio | parcialmente |
-| 10 | Cadastro de funcionário aberto, sem aprovação | médio | em aberto |
+| 10 | Cadastro de funcionário aberto, sem aprovação | médio | fechado na parte 1, aprovação na parte 2 |
 | 11 | Página de redefinição sem limite de requisições | baixo | corrigido, com teste |
 | 12 | Unicidade do coordenador só garantida na aplicação | baixo | corrigido, com teste |
 
@@ -137,8 +139,8 @@ Quando não há SMTP, a rota de recuperação devolvia o token na resposta:
 ```json
 {
   "mensagem": "Se este email estiver cadastrado...",
-  "linkRedefinicao": "klok://redefinir-senha?token=1f396ff7...",
-  "linkPagina": "http://localhost:3000/redefinir-senha/1f396ff7..."
+  "linkRedefinicao": "klok://redefinir-senha?empresa=ACME&token=1f396ff7...",
+  "linkPagina": "http://localhost:3000/redefinir-senha/ACME/1f396ff7..."
 }
 ```
 
@@ -251,20 +253,25 @@ HTTPS de verdade.
 antigo era `1234`, quatro dígitos que eu confirmei autenticando como coordenador.
 
 Resolvido agora: mínimo de 4 caracteres no registro, troca, redefinição e no
-cadastro do coordenador, e o `SENHA_MESTRE` deixou de existir, então a senha do coordenador
-passa a ser a que o usuário digita na primeira tela.
+cadastro do coordenador. O `SENHA_MESTRE` deixou de existir, então a senha do
+primeiro coordenador passa a ser a que o admin define no painel, e as seguintes
+são definidas no próprio app.
 
 Falta: exigir tamanho maior e alguma complexidade, e travar tentativas de senha
 fraca. Quatro caracteres é o piso, não uma política.
 
-### 10. Cadastro aberto (médio)
+### 10. Cadastro aberto (médio, fechado nesta entrega)
 
-`POST /api/auth/registrar` é público e sem aprovação: qualquer pessoa cria conta
-e já bate ponto. Login com Google também cria usuário para qualquer conta, sem
+`POST /api/auth/registrar` era público e sem aprovação: qualquer pessoa criava conta
+e já batia ponto. Login com Google também criava usuário para qualquer conta, sem
 checar `email_verified` nem domínio.
 
-Não corrigido por ser decisão de produto, não defeito. Mas vale saber que
-"criei uma conta e entrei no app" é o estado atual.
+Na parte 1 do multiempresa a rota passou a responder **403**: o cadastro está
+fechado e o funcionário é criado pelo coordenador. A parte 2 transforma o
+autocadastro em pedido pendente, com o código da empresa e a aprovação de um
+coordenador daquela empresa. Enquanto isso, a rota não cria mais ninguém e o teste
+`cadastro fechado recusa qualquer payload e não cria ninguém` guarda o
+comportamento.
 
 ### 11. Página de redefinição sem limite (baixo, corrigido)
 
@@ -272,24 +279,60 @@ Cinquenta GETs seguidos em tokens inválidos, todos 200, nenhum 429. Como o toke
 tem 256 bits, forçar é inviável, mas a rota não passa pelo limitador. Resolvido
  junto com o achado 5 (issue #14).
 
-### 12. Unicidade do coordenador na primeira vez (baixo, regra removida na issue #27)
+### 12. Unicidade do coordenador na primeira vez (baixo, rota removida)
 
-`POST /api/auth/coordenador` checa `existeCoordenador()` e depois insere. Como
+`POST /api/auth/coordenador` checava `existeCoordenador()` e depois inseria. Como
 `criarCoordenador` não tem `await` entre a checagem e o INSERT, o event loop do
 Node serializa as requisições. Medi removendo o índice e disparando 4 POSTs
 simultâneos 200 vezes, e em nenhuma rodada passou mais de um 201.
 
 Na issue #16, quando só podia existir um coordenador, a garantia foi reforçada com
 um índice único parcial em `usuarios(tipo) WHERE tipo = 'coordenador'`. A issue
-#27 passou a permitir vários coordenadores, e a migração 6 removeu esse índice. A
-rota pública continua criando apenas o primeiro; os demais entram por
-`POST /api/coordenadores`, com um coordenador autenticado.
+#27 passou a permitir vários coordenadores, e a migração 6 removeu esse índice.
 
-Risco residual: a rota pública depende de o controller continuar síncrono entre a
-checagem e o INSERT. Se alguém introduzir um `await` nesse trecho, duas
-requisições simultâneas de bootstrap poderiam criar dois coordenadores. O modelo
-agora aceita vários, mas a regra de "só o primeiro pela rota pública" deixaria de
-valer. O teste de concorrência em `ataques.test.js` guarda esse comportamento.
+Na parte 1 do multiempresa a rota pública de cadastro do coordenador foi removida.
+O primeiro coordenador agora é criado pelo admin, em
+`POST /api/admin/empresas/:codigo/coordenador`, que responde **409** se o usuário
+já existir naquela empresa. O risco de duas requisições simultâneas criarem dois
+coordenadores iguais passou a ser o mesmo de qualquer cadastro: a violação de
+unicidade é resolvida pelo índice da tabela `usuarios`.
+
+---
+
+## Multiempresa: isolamento por banco (parte 1, issue #30)
+
+O catálogo central (`catalogo.db`) guarda empresas e admins. Cada empresa tem o
+próprio arquivo (`dados/CODIGO.db`), com `usuarios`, `funcionarios` e `pontos`.
+Não existe uma coluna de empresa para filtrar: se a requisição abriu o arquivo
+errado, ela não alcança dado de outra empresa, porque o dado não está lá.
+
+O caminho do arquivo é validado antes de qualquer `join`: `codigoValido` exige
+`/^[A-Z][A-Z0-9]{1,19}$/`, então `..`, `/` e ponto não passam. `caminhoDe`
+devolve `null` para código inválido, e `criarEmpresa` recusa código cujo arquivo
+já exista sem registro no catálogo, para não reaproveitar um banco órfão.
+
+O token de empresa carrega `empresa` e `aud: klok-empresa`. No `autenticar`, o
+middleware abre o banco dessa empresa, busca o usuário pelo id e confere
+`usuario.empresa === empresa`. Token de uma empresa não abre outra, e token de
+admin (`aud: klok-admin`) não abre rota de empresa. O caminho inverso também vale.
+
+Empresa desativada é barrada em toda abertura, mesmo com o banco já no cache do
+gerenciador. O teste em `isolamento.test.js` desativa a empresa depois de abrir o
+banco e confirma o 401 no login seguinte.
+
+Senha de admin usa o mesmo `scrypt` com sal e um contador `senhaVersao` no token,
+então `npm run admin:criar -- --redefinir` derruba as sessões anteriores. O token
+do painel fica em `sessionStorage` e morre ao fechar a aba.
+
+Riscos residuais:
+
+- o isolamento depende de todo controlador usar `req.banco`. Uma consulta que
+  importe o banco errado furaria o modelo, então o teste de isolamento precisa
+  continuar valendo;
+- o painel não tem CSRF porque não usa cookie: o token vai no header. Se virar
+  cookie `httpOnly`, a proteção de CSRF entra junto;
+- o login do admin tem limite por IP em memória, com o mesmo risco de múltiplas
+  instâncias descrito no achado 5.
 
 ---
 

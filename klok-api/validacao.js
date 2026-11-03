@@ -3,6 +3,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const TAMANHOS = {
     usuario: 60,
+    empresa: 20,
     nome: 120,
     email: 160,
     numero: 40,
@@ -23,6 +24,12 @@ export function texto(valor, campo = 'nome') {
 
 export function senha(valor) {
     return typeof valor === 'string' ? valor : '';
+}
+
+// O código da empresa é digitado pelo usuário e pode vir em minúsculas, mas o
+// catálogo guarda sempre em maiúsculas.
+export function codigoEmpresa(valor) {
+    return texto(valor, 'empresa').toUpperCase();
 }
 
 export function semCaractereDeControle(valor) {

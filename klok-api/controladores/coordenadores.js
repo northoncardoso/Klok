@@ -29,12 +29,13 @@ export function validarNovoCoordenador(banco, body) {
     return { dados: { usuario, senha, nome, email, numero } };
 }
 
-export function criarControladoresCoordenadores({ banco }) {
+export function criarControladoresCoordenadores() {
     function listar(req, res) {
-        res.json(banco.listarCoordenadores());
+        res.json(req.banco.listarCoordenadores());
     }
 
     function criar(req, res) {
+        const banco = req.banco;
         const resultado = validarNovoCoordenador(banco, req.body);
         if (resultado.erro) {
             return res.status(resultado.status).json({ erro: resultado.erro });

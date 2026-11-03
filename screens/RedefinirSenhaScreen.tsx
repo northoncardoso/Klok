@@ -6,11 +6,12 @@ import estilos from '../estilos';
 import InputSenha from '../InputSenha';
 
 type RedefinirSenhaScreenProps = {
+    empresa: string;
     token: string;
     aoConcluir: () => void;
 };
 
-export default function RedefinirSenhaScreen({ token, aoConcluir }: RedefinirSenhaScreenProps) {
+export default function RedefinirSenhaScreen({ empresa, token, aoConcluir }: RedefinirSenhaScreenProps) {
     const [senhaNova, setSenhaNova] = useState('');
     const [confirmar, setConfirmar] = useState('');
     const [salvando, setSalvando] = useState(false);
@@ -26,7 +27,7 @@ export default function RedefinirSenhaScreen({ token, aoConcluir }: RedefinirSen
         }
         setSalvando(true);
         try {
-            await api.redefinirSenha(token, senhaNova);
+            await api.redefinirSenha(empresa, token, senhaNova);
             Alert.alert('Sucesso', 'Senha redefinida. Faça login com a nova senha.');
             aoConcluir();
         } catch (e) {

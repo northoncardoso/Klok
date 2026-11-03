@@ -4,7 +4,7 @@ import { asyncHandler } from '../middlewares.js';
 
 export function criarRotaPontos(deps) {
     const rota = Router();
-    const c = criarControladoresPontos(deps);
+    const c = criarControladoresPontos();
     const { autenticar, exigirCoordenador } = deps;
     const seguro = asyncHandler;
 

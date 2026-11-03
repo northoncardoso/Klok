@@ -26,7 +26,7 @@ Plano de implementação em `docs/superpowers/plans/`.
 
 ## Como rodar e testar
 
-- Backend: `cd klok-api` e `npm test`. Hoje são 79 testes. Exige Node 22.5 ou mais
+- Backend: `cd klok-api` e `npm test`. Hoje são 99 testes. Exige Node 22.5 ou mais
   novo por causa do `node:sqlite`. Se o Node do sistema for antigo, use
   `mise use node@22` antes.
 - App: `npm run typecheck`. Rodar com `npx expo start` ou `npx expo run:android`.
@@ -43,20 +43,25 @@ Plano de implementação em `docs/superpowers/plans/`.
 ## Pendências conhecidas (issues abertas)
 
 - #8: prints do app no README.
-- #19: pedido de funcionário com aprovação e aviso ao coordenador.
+- #31: multiempresa parte 2, autocadastro com pedido, aprovação e aviso.
+- #32: multiempresa parte 3, suporte e resumo no painel.
 - #20: limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git).
 
 ## Programa de trabalho em andamento
 
-Ordem aprovada, cada bloco com seu design e seu plano. Estado atual: blocos A e B
-concluídos, e o C é o próximo (núcleo, precisa de design antes).
+Ordem aprovada, cada bloco com seu design e seu plano.
 
 - A. Rate limit por endpoint (#14). Feito no PR #21, issue fechada.
 - B. Dependências e headers (#15). Feito no PR #22, issue fechada.
-- C. Pedido de funcionário com aprovação, aviso no app e email (#19, núcleo).
-  Design aprovado e salvo em
-  `docs/superpowers/specs/2026-10-13-pedido-funcionario-aprovacao-design.md`.
-  Implementação pausada: o próximo passo seria o plano em `docs/superpowers/plans/`.
-  Push ficou de fora e vira issue separada.
-- D. Screenshots e README (#8).
-- E. Limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git) (#20).
+- C. Multiempresa parte 1: catálogo, banco por empresa, admin e painel básico
+  (#30). Implementada na branch `feat/empresas-parte-1`, com o plano em
+  `docs/superpowers/plans/2026-11-02-empresas-parte-1.md` e o PR #34 aberto com
+  a CI verde. O login por empresa entrou no app e o autocadastro ficou fechado (403).
+- D. Multiempresa parte 2: pedido de funcionário com aprovação, aviso no app e
+  email (#19, reaberta como #31). Design original em
+  `docs/superpowers/specs/2026-10-13-pedido-funcionario-aprovacao-design.md`,
+  adaptado ao banco por empresa.
+- E. Multiempresa parte 3: suporte e resumo no painel (#32), com funcionários,
+  coordenadores, pontos, pedidos e backup.
+- F. Screenshots e README (#8).
+- G. Limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git) (#20).

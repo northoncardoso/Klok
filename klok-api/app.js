@@ -1,16 +1,28 @@
 import express from 'express';
 import helmet from 'helmet';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SignJWT } from 'jose';
 import { OAuth2Client } from 'google-auth-library';
-import { criarAutenticar, criarExigirCoordenador, criarTratadorDeErros, asyncHandler } from './middlewares.js';
+import {
+    criarAutenticar,
+    criarAutenticarAdmin,
+    criarExigirCoordenador,
+    criarResolverEmpresa,
+    criarTratadorDeErros,
+} from './middlewares.js';
 import { criarRotaAuth } from './rotas/auth.js';
 import { criarRotaFuncionarios } from './rotas/funcionarios.js';
 import { criarRotaPontos } from './rotas/pontos.js';
 import { criarRotaCoordenadores } from './rotas/coordenadores.js';
 import { criarControladoresAuth } from './controladores/auth.js';
+import { criarRotaAdmin } from './admin/rotas.js';
 import { criarEnviarEmail } from './email.js';
 
-export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
+const AUD_EMPRESA = 'klok-empresa';
+const AUD_ADMIN = 'klok-admin';
+
+export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, limiteAuth }) {
     const segredo = process.env.JWT_SECRET;
     if (!segredo) {
         throw new Error('JWT_SECRET não definido. Configure a variável de ambiente antes de subir a API.');
@@ -52,7 +64,9 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     function chaveLogin(req) {
         const usuario =
             req.body && typeof req.body.usuario === 'string' ? req.body.usuario.trim().toLowerCase() : '';
-        return `${req.ip}|${usuario}`;
+        const empresa =
+            req.body && typeof req.body.empresa === 'string' ? req.body.empresa.trim().toUpperCase() : '';
+        return `${req.ip}|${empresa}|${usuario}`;
     }
 
     const MENSAGEM_LOGIN = 'Muitas tentativas de login. Aguarde alguns minutos e tente de novo.';
@@ -63,31 +77,46 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
         login: criarLimitador({ max: limiteAuth ?? 10, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN, chave: chaveLogin }),
         loginIp: criarLimitador({ max: 60, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN }),
         registrar: criarLimitador({ max: 10, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_CADASTRO }),
-        coordenador: criarLimitador({ max: 10, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_CADASTRO }),
         google: criarLimitador({ max: 20, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
         esqueci: criarLimitador({ max: 5, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
         redefinir: criarLimitador({ max: 20, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
         paginaRedefinicao: criarLimitador({ max: 30, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
+        adminLogin: criarLimitador({ max: 10, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN }),
     };
 
-    async function gerarToken(usuario) {
+    async function gerarTokenEmpresa(usuario, empresa) {
         // A versão da senha viaja no token para que a troca de senha possa
         // revogar as sessões anteriores, sem precisar de lista de revogação.
         return new SignJWT({
             sub: String(usuario.id),
             tipo: usuario.tipo,
             v: Number(usuario.senhaVersao) || 0,
+            empresa,
         })
             .setProtectedHeader({ alg: 'HS256' })
+            .setAudience(AUD_EMPRESA)
             .setIssuedAt()
             .setExpirationTime('12h')
             .sign(SECRETO);
     }
 
-    const autenticar = criarAutenticar({ banco, segredo: SECRETO });
+    async function gerarTokenAdmin(admin) {
+        return new SignJWT({
+            sub: String(admin.id),
+            v: Number(admin.senhaVersao) || 0,
+        })
+            .setProtectedHeader({ alg: 'HS256' })
+            .setAudience(AUD_ADMIN)
+            .setIssuedAt()
+            .setExpirationTime('12h')
+            .sign(SECRETO);
+    }
+
+    const autenticar = criarAutenticar({ gerenciador, segredo: SECRETO });
+    const autenticarAdmin = criarAutenticarAdmin({ catalogo, segredo: SECRETO });
+    const resolverEmpresa = criarResolverEmpresa({ gerenciador });
     const exigirCoordenador = criarExigirCoordenador();
-    const enviarEmailFinal =
-        enviarEmail ?? criarEnviarEmail();
+    const enviarEmailFinal = enviarEmail ?? criarEnviarEmail();
 
     const ehProducao = () => process.env.NODE_ENV === 'production';
 
@@ -108,23 +137,41 @@ export function criarApp({ banco, clienteGoogle, enviarEmail, limiteAuth }) {
     });
 
     const deps = {
-        banco,
+        gerenciador,
+        catalogo,
         googleClient,
-        gerarToken,
+        gerarTokenEmpresa,
+        gerarTokenAdmin,
         limitadores,
         autenticar,
+        autenticarAdmin,
+        resolverEmpresa,
         exigirCoordenador,
         enviarEmail: enviarEmailFinal,
     };
 
     app.use('/api/auth', criarRotaAuth(deps));
+    app.use('/api/admin', criarRotaAdmin(deps));
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
     app.use('/api/coordenadores', criarRotaCoordenadores(deps));
     app.get(
-        '/redefinir-senha/:token',
+        '/redefinir-senha/:empresa/:token',
         limitadores.paginaRedefinicao,
+        resolverEmpresa,
         criarControladoresAuth(deps).paginaRedefinicao
+    );
+
+    // O painel é HTML, JS e CSS sem build. A rota explícita vem antes do
+    // estático para `/admin` responder o index sem redirecionar para `/admin/`.
+    const painelDir = fileURLToPath(new URL('./admin/painel', import.meta.url));
+    app.get('/admin', (req, res) => res.sendFile(join(painelDir, 'index.html')));
+    app.use(
+        '/admin',
+        express.static(painelDir, {
+            // O painel é interno e guarda o token em sessionStorage: nada de cache.
+            setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+        })
     );
 
     app.use('/api', (req, res) => {

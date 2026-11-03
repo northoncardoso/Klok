@@ -1,8 +1,8 @@
 import { emailNormalizado, emailValido, semCaractereDeControle, texto } from '../validacao.js';
 
-export function criarControladoresFuncionarios({ banco }) {
+export function criarControladoresFuncionarios() {
     function listar(req, res) {
-        res.json(banco.listarFuncionarios());
+        res.json(req.banco.listarFuncionarios());
     }
 
     function preparar(body) {
@@ -19,6 +19,7 @@ export function criarControladoresFuncionarios({ banco }) {
     }
 
     function criar(req, res) {
+        const banco = req.banco;
         const dados = preparar(req.body);
         if (dados.erro) return res.status(dados.status).json({ erro: dados.erro });
         const id = banco.criarFuncionario(dados.nome, dados.numero, dados.email);
@@ -26,6 +27,7 @@ export function criarControladoresFuncionarios({ banco }) {
     }
 
     function atualizar(req, res) {
+        const banco = req.banco;
         const id = Number(req.params.id);
         if (!banco.buscarFuncionario(id)) {
             return res.status(404).json({ erro: 'Funcionário não encontrado' });
@@ -37,7 +39,7 @@ export function criarControladoresFuncionarios({ banco }) {
     }
 
     function apagar(req, res) {
-        const apagou = banco.apagarFuncionario(Number(req.params.id));
+        const apagou = req.banco.apagarFuncionario(Number(req.params.id));
         if (!apagou) {
             return res.status(404).json({ erro: 'Funcionário não encontrado' });
         }

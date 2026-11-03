@@ -1,8 +1,9 @@
 import { TIPOS_PONTO } from '../constantes.js';
 import { texto } from '../validacao.js';
 
-export function criarControladoresPontos({ banco }) {
+export function criarControladoresPontos() {
     function bater(req, res) {
+        const banco = req.banco;
         const tipo = texto(req.body?.tipo, 'tipo');
         if (req.usuario.funcionarioId == null) {
             return res.status(400).json({ erro: 'Usuário sem funcionário vinculado' });
@@ -21,11 +22,11 @@ export function criarControladoresPontos({ banco }) {
         if (req.usuario.funcionarioId == null) {
             return res.json([]);
         }
-        res.json(banco.listarPontos(req.usuario.funcionarioId));
+        res.json(req.banco.listarPontos(req.usuario.funcionarioId));
     }
 
     function todos(req, res) {
-        res.json(banco.listarTodosPontos());
+        res.json(req.banco.listarTodosPontos());
     }
 
     return { bater, meus, todos };

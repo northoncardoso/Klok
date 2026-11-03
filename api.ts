@@ -9,7 +9,6 @@ import type {
     Ponto,
     RegistroUsuario,
     Sessao,
-    StatusCoordenador,
     UsuarioInfo,
 } from './types';
 
@@ -19,15 +18,27 @@ const API_URL =
 
 const TOKEN_KEY = 'klok_token';
 const SESSION_KEY = 'klok_session';
+const EMPRESA_KEY = 'klok_empresa';
+
+export async function lerEmpresa(): Promise<string> {
+    return (await SecureStore.getItemAsync(EMPRESA_KEY)) || '';
+}
+
+export async function salvarEmpresa(codigo: string): Promise<void> {
+    const limpo = codigo.trim().toUpperCase();
+    if (limpo) await SecureStore.setItemAsync(EMPRESA_KEY, limpo);
+}
 
 export async function salvarSessao(dados: Sessao): Promise<void> {
     await SecureStore.setItemAsync(TOKEN_KEY, dados.token);
+    await salvarEmpresa(dados.empresa);
     await SecureStore.setItemAsync(
         SESSION_KEY,
         JSON.stringify({
             tipo: dados.tipo,
             nome: dados.nome,
             id: dados.id,
+            empresa: dados.empresa,
         })
     );
 }
@@ -42,7 +53,15 @@ export async function lerSessao(): Promise<Sessao | null> {
     } catch {
         dados = null;
     }
-    return { token, ...(dados || {}), tipo: dados?.tipo === 'mestre' ? 'coordenador' : dados?.tipo };
+    if (!dados || typeof dados !== 'object') return null;
+
+    // Sessão gravada antes do banco por empresa não tem empresa e não pode
+    // escolher o banco certo: é melhor pedir login de novo.
+    const empresa = typeof dados.empresa === 'string' ? dados.empresa.trim().toUpperCase() : '';
+    const tipo = dados.tipo === 'mestre' ? 'coordenador' : dados.tipo;
+    if (!empresa || (tipo !== 'coordenador' && tipo !== 'funcionario')) return null;
+
+    return { token, tipo, nome: dados.nome, id: dados.id, empresa };
 }
 
 export async function limparSessao(): Promise<void> {
@@ -74,30 +93,26 @@ async function requisicao<T>(caminho: string, metodo = 'GET', corpo: unknown = n
 }
 
 export const api = {
-    statusCoordenador: (): Promise<StatusCoordenador> =>
-        requisicao<StatusCoordenador>('/api/auth/coordenador', 'GET'),
-    criarPrimeiroCoordenador: (dados: CoordenadorCriar): Promise<Sessao> =>
-        requisicao<Sessao>('/api/auth/coordenador', 'POST', dados),
     listarCoordenadores: (token: string): Promise<Coordenador[]> =>
         requisicao<Coordenador[]>('/api/coordenadores', 'GET', null, token),
     criarCoordenador: (dados: CoordenadorCriar, token: string): Promise<Coordenador> =>
         requisicao<Coordenador>('/api/coordenadores', 'POST', dados, token),
-    login: (usuario: string, senha: string): Promise<Sessao> =>
-        requisicao<Sessao>('/api/auth/login', 'POST', { usuario, senha }),
-    registrar: (usuario: string, senha: string, nome: string): Promise<RegistroUsuario> =>
-        requisicao<RegistroUsuario>('/api/auth/registrar', 'POST', { usuario, senha, nome }),
-    loginGoogle: (idToken: string): Promise<Sessao> =>
-        requisicao<Sessao>('/api/auth/google', 'POST', { idToken }),
+    login: (empresa: string, usuario: string, senha: string): Promise<Sessao> =>
+        requisicao<Sessao>('/api/auth/login', 'POST', { empresa, usuario, senha }),
+    registrar: (empresa: string, usuario: string, senha: string, nome: string): Promise<RegistroUsuario> =>
+        requisicao<RegistroUsuario>('/api/auth/registrar', 'POST', { empresa, usuario, senha, nome }),
+    loginGoogle: (empresa: string, idToken: string): Promise<Sessao> =>
+        requisicao<Sessao>('/api/auth/google', 'POST', { empresa, idToken }),
     me: (token: string): Promise<UsuarioInfo> =>
         requisicao<UsuarioInfo>('/api/auth/eu', 'GET', null, token),
     atualizarEu: (dados: FuncionarioCriar, token: string): Promise<UsuarioInfo> =>
         requisicao<UsuarioInfo>('/api/auth/eu', 'PUT', dados, token),
     alterarSenha: (senhaAtual: string, senhaNova: string, token: string): Promise<{ sucesso: boolean; mensagem: string }> =>
         requisicao<{ sucesso: boolean; mensagem: string }>('/api/auth/senha', 'PUT', { senhaAtual, senhaNova }, token),
-    esqueciSenha: (email: string): Promise<{ sucesso: boolean; mensagem: string; linkRedefinicao?: string }> =>
-        requisicao<{ sucesso: boolean; mensagem: string; linkRedefinicao?: string }>('/api/auth/esqueci-senha', 'POST', { email }),
-    redefinirSenha: (token: string, novaSenha: string): Promise<{ sucesso: boolean; mensagem: string }> =>
-        requisicao<{ sucesso: boolean; mensagem: string }>('/api/auth/redefinir-senha', 'POST', { token, novaSenha }),
+    esqueciSenha: (empresa: string, email: string): Promise<{ sucesso: boolean; mensagem: string; linkRedefinicao?: string }> =>
+        requisicao<{ sucesso: boolean; mensagem: string; linkRedefinicao?: string }>('/api/auth/esqueci-senha', 'POST', { empresa, email }),
+    redefinirSenha: (empresa: string, token: string, novaSenha: string): Promise<{ sucesso: boolean; mensagem: string }> =>
+        requisicao<{ sucesso: boolean; mensagem: string }>('/api/auth/redefinir-senha', 'POST', { empresa, token, novaSenha }),
     listarFuncionarios: (token: string): Promise<Funcionario[]> =>
         requisicao<Funcionario[]>('/api/funcionarios', 'GET', null, token),
     criarFuncionario: (dados: FuncionarioCriar, token: string): Promise<Funcionario> =>
