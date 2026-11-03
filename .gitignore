@@ -43,6 +43,7 @@ yarn-error.*
 *.db-shm
 *.db.bak*
 klok-api/.env
+klok-api/dados/
 
 # Instruções pessoais de ambiente (não versionar)
 info-roda-klok.txt

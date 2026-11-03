@@ -2,14 +2,17 @@
 
 Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto**.
 
-- Login por **usuário/senha** (local) ou **Entrar com Google** (OAuth2).
-- **Cadastro do coordenador no primeiro uso**: na primeira abertura o app pede que
-  você crie o usuário coordenador (usuário, senha, email e celular). É ele quem
-  gerencia os funcionários.
+- Login por **empresa, usuário e senha** (local) ou **Entrar com Google** (OAuth2).
+- Cada **empresa tem o próprio banco SQLite**, com coordenadores, funcionários e pontos isolados. Um catálogo central guarda quais empresas existem e quem é admin.
+- O **admin da KLOK** cria a empresa e o primeiro coordenador dela pelo painel web em `/admin`.
 - Perfil **coordenador** controla os funcionários (cadastra, edita, exclui e vê os
   pontos de todos) e pode criar outros coordenadores na tela de Coordenadores.
 - Funcionário **bate o ponto** e vê o próprio histórico.
-- Todo dado fica centralizado em um **backend Node.js/Express** com SQLite (nativo do Node, sem dependência extra).
+- Todo dado fica em um **backend Node.js/Express** com SQLite (nativo do Node, sem dependência extra).
+
+> Nesta entrega o **autocadastro de funcionário está fechado**: é o coordenador
+> quem cria o acesso. O pedido com aprovação e aviso ao coordenador entra na
+> parte 2, junto com o código da empresa.
 
 > Removido o Keycloak. O único provedor de login social é o **Google OAuth2**.
 > O slug do EAS segue `myreactjobs` por ser o identificador do projeto EAS que
@@ -21,17 +24,20 @@ Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto
 ## Arquitetura
 
 ```
-App React Native (Expo)
-        │  HTTPS/JSON (JWT Bearer)
-        ▼
+App React Native (Expo)                 Painel web do admin (/admin)
+        │  HTTPS/JSON (JWT Bearer)              │
+        ▼                                       ▼
 Backend Node.js/Express (klok-api/)
         │
-        ▼
-SQLite (nativo node:sqlite)  →  funcionarios | usuarios | pontos
+        ├── catalogo.db  →  empresas | admins
+        │
+        └── dados/ACME.db, dados/KLOK.db, ...
+                →  usuarios | funcionarios | pontos
 ```
 
 - **App**: Expo SDK 57, `@react-native-google-signin/google-signin`, `expo-secure-store` (sessão persistida de forma segura).
-- **Backend**: Express, JWT assinado com `jose`, verificação do ID token do Google com `google-auth-library`, banco com `node:sqlite` (zero migração nativa).
+- **Backend**: Express, JWT assinado com `jose` (audience separada para empresa e admin), verificação do ID token do Google com `google-auth-library`, banco com `node:sqlite` (zero migração nativa).
+- **Painel**: HTML, CSS e JS puros em `klok-api/admin/painel/`, sem build e sem framework.
 
 ---
 
@@ -43,17 +49,26 @@ SQLite (nativo node:sqlite)  →  funcionarios | usuarios | pontos
 cd klok-api
 cp .env.example .env      # ajuste o JWT_SECRET
 npm install
+npm run admin:criar       # cria o admin da KLOK, com usuário e senha
 npm start                 # sobe na porta 3000
 ```
 
-O boot exige apenas o `JWT_SECRET`. **Nenhuma senha de coordenador vem pronta**: o banco
-nasce sem nenhum usuário e o primeiro acesso do app abre a tela de cadastro do
-coordenador. O backend só falha no boot se o `JWT_SECRET` não estiver configurado.
+O boot exige apenas o `JWT_SECRET`. Os dados ficam em `klok-api/dados/` (ou no
+caminho de `DADOS_DIR`), com um `catalogo.db` para as empresas e os admins e um
+`CODIGO.db` por empresa. Os bancos nascem vazios: não existe coordenador semeado
+nem senha em `.env`.
+
+Para trocar a senha de um admin existente:
+
+```bash
+npm run admin:criar -- --redefinir
+```
+
+O painel fica em `http://localhost:3000/admin`.
 
 > Antes era usada a variável `SENHA_MESTRE`, que semeava um usuário `mestre` com
-> senha conhecida no `.env`. Isso foi removido: agora cada instalação tem a senha
-> que o próprio usuário digitou na primeira tela, e ela nunca passa por arquivo
-> de configuração.
+> senha conhecida no `.env`. Isso foi removido: agora o acesso é criado por
+> comando ou pelo painel, e a senha nunca passa por arquivo de configuração.
 
 ### 2. App (Expo)
 
@@ -115,16 +130,27 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 
 ## API
 
+Todas as rotas de empresa recebem `empresa` no corpo ou na query, menos as que
+usam o token, que já carrega a empresa. O token de empresa (`aud: klok-empresa`)
+não abre rota de admin, e o de admin (`aud: klok-admin`) não abre rota de empresa.
+
 | Método | Rota | Acesso | Descrição |
 |--------|------|--------|-----------|
-| GET | `/api/auth/coordenador` | público | Diz se o coordenador já foi cadastrado |
-| POST | `/api/auth/coordenador` | público | Cadastra o primeiro coordenador → JWT |
+| POST | `/api/admin/login` | público | Login do admin → JWT de admin |
+| GET | `/api/admin/empresas` | admin | Lista empresas |
+| POST | `/api/admin/empresas` | admin | Cria empresa e o banco dela |
+| PATCH | `/api/admin/empresas/:codigo` | admin | Renomeia, ativa ou desativa |
+| POST | `/api/admin/empresas/:codigo/coordenador` | admin | Cria o primeiro coordenador |
+| POST | `/api/auth/login` | público | Login local na empresa → JWT |
+| POST | `/api/auth/google` | público | Login Google na empresa → JWT |
+| POST | `/api/auth/registrar` | público | Fechado nesta entrega, responde 403 |
+| GET | `/api/auth/eu` | logado | Dados do usuário |
+| PUT | `/api/auth/eu` | logado | Atualiza os próprios dados |
+| PUT | `/api/auth/senha` | logado | Troca a senha |
+| POST | `/api/auth/esqueci-senha` | público | Envia o link de recuperação |
+| POST | `/api/auth/redefinir-senha` | público | Define a nova senha |
 | GET | `/api/coordenadores` | coordenador | Lista os coordenadores |
 | POST | `/api/coordenadores` | coordenador | Cadastra outro coordenador |
-| POST | `/api/auth/registrar` | público | Cadastra funcionário local |
-| POST | `/api/auth/login` | público | Login local → JWT |
-| POST | `/api/auth/google` | público | Login Google (envia `idToken`) → JWT |
-| GET | `/api/auth/eu` | logado | Dados do usuário |
 | GET | `/api/funcionarios` | coordenador | Lista funcionários |
 | POST | `/api/funcionarios` | coordenador | Cria funcionário |
 | PUT | `/api/funcionarios/:id` | coordenador | Edita funcionário |
@@ -145,13 +171,15 @@ Raiz (app):
 
 `klok-api/.env`:
 - `PORT`
-- `JWT_SECRET` — segredo para assinar os tokens (obrigatório, sem fallback)
-- `NODE_ENV` — deixe vazio em desenvolvimento; use `production` ao publicar
-- `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB` — mesma audience usada para validar o token
-- `URL_BASE` — base pública usada no link de recuperação por email
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_REMETENTE` — envio do email de recuperação
+- `JWT_SECRET`: segredo para assinar os tokens (obrigatório, sem fallback)
+- `DADOS_DIR`: pasta dos bancos, padrão `dados`
+- `NODE_ENV`: deixe vazio em desenvolvimento; use `production` ao publicar
+- `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB`: mesma audience usada para validar o token
+- `URL_BASE`: base pública usada no link de recuperação por email
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_REMETENTE`: envio do email de recuperação
 
-Não existe mais `SENHA_MESTRE`: a senha do coordenador é definida por você no app.
+Não existe mais `SENHA_MESTRE`: o admin é criado por `npm run admin:criar`, e o
+coordenador, pelo painel do admin. Nenhuma senha fica em arquivo de configuração.
 
 ### Segurança
 
@@ -169,20 +197,21 @@ Duas coisas obrigatórias antes de expor a API fora da sua rede local:
 
 ---
 
-## Primeiro acesso: cadastro do coordenador
+## Primeiro acesso: empresa, coordenador e funcionário
 
-O app consulta `GET /api/auth/coordenador` ao abrir. Se responder `cadastrado: false`,
-a primeira tela é o **cadastro do coordenador**, com um aviso em vermelho explicando
-que ele precisa ser criado antes de usar o app. Depois desse primeiro, outros
-coordenadores são criados dentro do app, na tela de Coordenadores.
+1. Crie o admin com `npm run admin:criar`.
+2. Abra `http://localhost:3000/admin` e entre.
+3. Em **Nova empresa**, informe o código e o nome. O código tem de 2 a 20 letras
+   maiúsculas ou números, começando por letra. A empresa nasce com o banco próprio.
+4. Na **etapa 2**, crie o usuário coordenador com senha, nome, email e número.
+   Se essa etapa falhar, a empresa continua criada e o painel deixa cadastrar o
+   coordenador depois.
+5. No app, informe o código da empresa, o usuário e a senha.
 
-Os campos, nesta ordem:
+O código da empresa não diferencia maiúsculas e minúsculas: `acme` vira `ACME`
+antes de sair do app. Empresa desativada não deixa ninguém entrar, mesmo que o
+banco dela já esteja aberto em cache.
 
-1. Nome de usuário coordenador
-2. Senha
-3. Email
-4. Número de celular
-
-Depois de salvar, o app já entra logado com o perfil de coordenador. O `POST
-/api/auth/coordenador` responde **409** se o coordenador já existir, então ninguém consegue
-sequestrar a conta depois. A senha é guardada com `scrypt` e sal, igual às demais.
+O funcionário é criado pelo coordenador na tela de Funcionários. O autocadastro
+está fechado nesta entrega. Na parte 2 ele passa a ser um pedido pendente, com o
+código da empresa e a aprovação de um coordenador.
