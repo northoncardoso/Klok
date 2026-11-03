@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { abrirCatalogo } from './admin/catalogo.js';
 import { criarGerenciador } from './admin/gerenciador-bancos.js';
@@ -15,7 +16,10 @@ if (
     );
 }
 
-const dadosDir = process.env.DADOS_DIR ?? 'dados';
+// O padrão é a pasta `dados` ao lado deste arquivo, para os bancos não mudarem
+// de lugar conforme a pasta de onde o comando foi iniciado.
+const pastaDoModulo = fileURLToPath(new URL('.', import.meta.url));
+const dadosDir = process.env.DADOS_DIR ?? join(pastaDoModulo, 'dados');
 const catalogo = abrirCatalogo(join(dadosDir, 'catalogo.db'));
 const gerenciador = criarGerenciador({ catalogo, dadosDir });
 const app = criarApp({ gerenciador, catalogo });
