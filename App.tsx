@@ -12,33 +12,40 @@ import {
 
 import estilos from './estilos';
 import HomeScreen from './screens/HomeScreen';
-import CriarCoordenadorScreen from './screens/CriarCoordenadorScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
 import CoordenadoresScreen from './screens/CoordenadoresScreen';
 import PontoScreen from './screens/PontoScreen';
 import RedefinirSenhaScreen from './screens/RedefinirSenhaScreen';
 import UsuarioScreen from './screens/UsuarioScreen';
-import { api, lerSessao, limparSessao, mensagemDeErro, salvarSessao } from './api';
+import { lerSessao, limparSessao, mensagemDeErro, salvarEmpresa, salvarSessao } from './api';
 import type { Sessao } from './types';
 
 type Tela = 'Home' | 'Funcionarios' | 'Coordenadores' | 'Bater o ponto' | 'Usuario';
 type Portao =
     | { estado: 'carregando' }
-    | { estado: 'coordenador-pendente' }
     | { estado: 'pronto' }
     | { estado: 'erro'; mensagem: string };
+type Redefinicao = { empresa: string; token: string };
 
 const LARGURA_MENU = Dimensions.get('window').width * 0.7;
 
-function tokenDeLinkDeRedefinicao(url: string): string | null {
-    try {
-        const inicio = url.indexOf('token=');
-        if (inicio === -1) return null;
-        const token = url.slice(inicio + 6);
-        return token || null;
-    } catch {
-        return null;
+function parametrosDoLink(url: string): Redefinicao | null {
+    const query = url.split('?')[1];
+    if (!query) return null;
+
+    const valores: Record<string, string> = {};
+    for (const par of query.split('&')) {
+        if (!par) continue;
+        const [chave, valor = ''] = par.split('=');
+        try {
+            valores[decodeURIComponent(chave)] = decodeURIComponent(valor);
+        } catch {
+            valores[chave] = valor;
+        }
     }
+
+    if (!valores.token) return null;
+    return { empresa: (valores.empresa || '').trim().toUpperCase(), token: valores.token };
 }
 
 export default function App() {
@@ -46,17 +53,33 @@ export default function App() {
     const [menuVisivel, setMenuVisivel] = useState(false);
     const [sessao, setSessao] = useState<Sessao | null>(null);
     const [modalSairVisivel, setModalSairVisivel] = useState(false);
-    const [tokenRedefinir, setTokenRedefinir] = useState<string | null>(null);
+    const [redefinicao, setRedefinicao] = useState<Redefinicao | null>(null);
     const [portao, setPortao] = useState<Portao>({ estado: 'carregando' });
 
     const posicaoMenu = useRef(new Animated.Value(-LARGURA_MENU)).current;
     const opacidadeOverlay = useRef(new Animated.Value(0)).current;
 
+    const carregarSessao = async () => {
+        setPortao({ estado: 'carregando' });
+        try {
+            const s = await lerSessao();
+            if (s) {
+                setSessao(s);
+                setTelaAtual('Bater o ponto');
+            }
+            setPortao({ estado: 'pronto' });
+        } catch (e) {
+            setPortao({ estado: 'erro', mensagem: mensagemDeErro(e) });
+        }
+    };
+
     useEffect(() => {
         const aplicarLink = (url?: string | null) => {
             if (!url) return;
-            const token = tokenDeLinkDeRedefinicao(url);
-            if (token) setTokenRedefinir(token);
+            const dados = parametrosDoLink(url);
+            if (!dados) return;
+            if (dados.empresa) salvarEmpresa(dados.empresa);
+            setRedefinicao(dados);
         };
         Linking.getInitialURL().then(aplicarLink);
         const sub = Linking.addEventListener('url', ({ url }) => aplicarLink(url));
@@ -64,41 +87,11 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        (async () => {
-            const s = await lerSessao();
-            if (s && s.token) {
-                setSessao(s);
-                setTelaAtual('Bater o ponto');
-            }
-
-            if (s && s.token && s.tipo === 'coordenador') {
-                setPortao({ estado: 'pronto' });
-                return;
-            }
-
-            try {
-                const status = await api.statusCoordenador();
-                if (!status.cadastrado) {
-                    setPortao({ estado: 'coordenador-pendente' });
-                    return;
-                }
-                setPortao({ estado: 'pronto' });
-            } catch (e) {
-                setPortao({ estado: 'erro', mensagem: mensagemDeErro(e) });
-            }
-        })();
+        carregarSessao();
     }, []);
 
-    const tentarNovamente = async () => {
-        setPortao({ estado: 'carregando' });
-        try {
-            const status = await api.statusCoordenador();
-            setPortao(
-                status.cadastrado ? { estado: 'pronto' } : { estado: 'coordenador-pendente' }
-            );
-        } catch (e) {
-            setPortao({ estado: 'erro', mensagem: mensagemDeErro(e) });
-        }
+    const tentarNovamente = () => {
+        carregarSessao();
     };
 
     const abrirMenu = () => {
@@ -139,7 +132,7 @@ export default function App() {
     };
 
     const aoConcluirRedefinicao = async () => {
-        setTokenRedefinir(null);
+        setRedefinicao(null);
         await limparSessao();
         setSessao(null);
         setTelaAtual('Home');
@@ -148,21 +141,17 @@ export default function App() {
     const entrarComSessao = (dados: Sessao) => {
         setSessao(dados);
         setTelaAtual('Bater o ponto');
-        if (dados.tipo === 'coordenador') setPortao({ estado: 'pronto' });
     };
 
     const renderizarTela = () => {
-        if (tokenRedefinir) {
+        if (redefinicao) {
             return (
                 <RedefinirSenhaScreen
-                    token={tokenRedefinir}
+                    empresa={redefinicao.empresa}
+                    token={redefinicao.token}
                     aoConcluir={aoConcluirRedefinicao}
                 />
             );
-        }
-
-        if (portao.estado === 'coordenador-pendente' && !sessao) {
-            return <CriarCoordenadorScreen aoEntrar={entrarComSessao} />;
         }
 
         if (!sessao) {

@@ -5,6 +5,7 @@ export type Sessao = {
     tipo: Papel;
     nome: string;
     id: number;
+    empresa: string;
 };
 
 export type Funcionario = {
@@ -33,10 +34,6 @@ export type RegistroUsuario = {
     mensagem: string;
 };
 
-export type StatusCoordenador = {
-    cadastrado: boolean;
-};
-
 export type CoordenadorCriar = {
     usuario: string;
     senha: string;
@@ -57,6 +54,7 @@ export type UsuarioInfo = {
     id: number;
     usuario: string;
     tipo: Papel;
+    empresa: string;
     funcionarioId: number | null;
     hasSenha: boolean;
     nome: string;

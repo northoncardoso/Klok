@@ -180,6 +180,7 @@ export default function UsuarioScreen({ token, aoAtualizarNome }: UsuarioScreenP
                             <>
                                 <Text style={estilos.usuarioSecaoTitulo}>Recuperar senha</Text>
                                 <FormularioRecuperarSenha
+                                    empresa={dados?.empresa ?? ''}
                                     onVoltar={() => setMostrandoEsqueciSenha(false)}
                                     onEnviado={fecharModalSenha}
                                 />

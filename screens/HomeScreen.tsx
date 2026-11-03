@@ -13,7 +13,7 @@ import { GoogleSignin, statusCodes, isErrorWithCode } from '@react-native-google
 import estilos from '../estilos';
 import InputSenha from '../InputSenha';
 import FormularioRecuperarSenha from './FormularioRecuperarSenha';
-import { api, salvarSessao, mensagemDeErro } from '../api';
+import { api, lerEmpresa, salvarEmpresa, salvarSessao, mensagemDeErro } from '../api';
 import type { Sessao } from '../types';
 
 type HomeScreenProps = {
@@ -25,7 +25,12 @@ GoogleSignin.configure({
     offlineAccess: false,
 });
 
+function codigoDaEmpresa(valor: string): string {
+    return valor.trim().toUpperCase();
+}
+
 export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
+    const [empresa, setEmpresa] = useState('');
     const [usuario, setUsuario] = useState('');
     const [senha, setSenha] = useState('');
     const [nome, setNome] = useState('');
@@ -33,14 +38,30 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
     const [modoRecuperar, setModoRecuperar] = useState(false);
     const [carregando, setCarregando] = useState(false);
 
+    useEffect(() => {
+        lerEmpresa().then(setEmpresa).catch(() => setEmpresa(''));
+    }, []);
+
+    const empresaPreenchida = (): string | null => {
+        const codigo = codigoDaEmpresa(empresa);
+        if (!codigo) {
+            Alert.alert('Atenção', 'Informe o código da empresa.');
+            return null;
+        }
+        return codigo;
+    };
+
     const entrar = async () => {
         if (!usuario.trim() || !senha.trim()) {
             Alert.alert('Atenção', 'Preencha usuário e senha.');
             return;
         }
+        const codigo = empresaPreenchida();
+        if (!codigo) return;
+
         setCarregando(true);
         try {
-            const dados = await api.login(usuario.trim(), senha);
+            const dados = await api.login(codigo, usuario.trim(), senha);
             await salvarSessao(dados);
             aoEntrar(dados);
         } catch (e) {
@@ -55,10 +76,17 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             Alert.alert('Atenção', 'Preencha usuário e senha.');
             return;
         }
+        const codigo = empresaPreenchida();
+        if (!codigo) return;
+
         setCarregando(true);
         try {
-            await api.registrar(usuario.trim(), senha, nome.trim());
-            Alert.alert('Sucesso', 'Usuário cadastrado! Agora faça login.');
+            await salvarEmpresa(codigo);
+            await api.registrar(codigo, usuario.trim(), senha, nome.trim());
+            Alert.alert(
+                'Pedido enviado',
+                'Seu cadastro foi enviado. Aguarde a aprovação de um coordenador da empresa.'
+            );
             setModoCadastro(false);
             setSenha('');
             setNome('');
@@ -70,6 +98,9 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
     };
 
     const entrarComGoogle = async () => {
+        const codigo = empresaPreenchida();
+        if (!codigo) return;
+
         try {
             await GoogleSignin.hasPlayServices();
             const resposta = await GoogleSignin.signIn();
@@ -81,7 +112,8 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             }
 
             setCarregando(true);
-            const dados = await api.loginGoogle(idToken);
+            await salvarEmpresa(codigo);
+            const dados = await api.loginGoogle(codigo, idToken);
             await salvarSessao(dados);
             aoEntrar(dados);
         } catch (e) {
@@ -95,6 +127,13 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         } finally {
             setCarregando(false);
         }
+    };
+
+    const abrirRecuperacao = () => {
+        const codigo = empresaPreenchida();
+        if (!codigo) return;
+        salvarEmpresa(codigo).catch(() => {});
+        setModoRecuperar(true);
     };
 
     return (
@@ -113,6 +152,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
 
             {modoRecuperar && (
                 <FormularioRecuperarSenha
+                    empresa={codigoDaEmpresa(empresa)}
                     onVoltar={() => setModoRecuperar(false)}
                     onEnviado={() => setModoRecuperar(false)}
                 />
@@ -120,6 +160,17 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
 
             {!modoRecuperar && (
                 <>
+                    <TextInput
+                        placeholder="Empresa"
+                        value={empresa}
+                        onChangeText={setEmpresa}
+                        style={estilos.estilosLoginInput}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        maxLength={20}
+                        placeholderTextColor="gray"
+                    />
+
                     {modoCadastro && (
                         <TextInput
                             placeholder="Nome"
@@ -169,7 +220,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
                     )}
 
                     {!modoCadastro && (
-                        <TouchableOpacity onPress={() => setModoRecuperar(true)}>
+                        <TouchableOpacity onPress={abrirRecuperacao}>
                             <Text style={{ color: 'dodgerblue', marginTop: 12, fontSize: 14 }}>
                                 Esqueci minha senha?
                             </Text>
