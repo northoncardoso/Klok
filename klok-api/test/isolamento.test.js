@@ -54,7 +54,7 @@ test('token da empresa A não abre dados da empresa B', async (t) => {
 test('token de admin não entra em rota de empresa', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
-    const token = await logarAdmin(s, 'root', 'senha-admin-teste');
+    const token = await logarAdmin(s.baseUrl, 'root', 'senha-admin-teste');
     const resp = await fetch(`${s.baseUrl}/api/funcionarios`, {
         headers: { authorization: `Bearer ${token}` },
     });

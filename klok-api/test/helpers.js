@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SignJWT } from 'jose';
 
 import { criarApp } from '../app.js';
 import { abrirCatalogo } from '../admin/catalogo.js';
@@ -107,16 +106,12 @@ export async function logar(baseUrl, usuario, senha, empresa = EMPRESA) {
     return corpo.token;
 }
 
-// A rota de login do admin só existe na Task 7. Até lá, o token é assinado
-// aqui do mesmo jeito que ela vai assinar, para o teste de isolamento conferir
-// a audience sem depender da rota.
-export async function logarAdmin(app, usuario, senha) {
-    const admin = app.catalogo.verificarSenhaAdmin(usuario, senha);
-    if (!admin) return null;
-    return new SignJWT({ sub: String(admin.id), v: Number(admin.senhaVersao) || 0 })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setAudience('klok-admin')
-        .setIssuedAt()
-        .setExpirationTime('12h')
-        .sign(new TextEncoder().encode(process.env.JWT_SECRET));
+export async function logarAdmin(baseUrl, usuario, senha) {
+    const resp = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ usuario, senha }),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()).token;
 }

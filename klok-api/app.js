@@ -14,6 +14,7 @@ import { criarRotaFuncionarios } from './rotas/funcionarios.js';
 import { criarRotaPontos } from './rotas/pontos.js';
 import { criarRotaCoordenadores } from './rotas/coordenadores.js';
 import { criarControladoresAuth } from './controladores/auth.js';
+import { criarRotaAdmin } from './admin/rotas.js';
 import { criarEnviarEmail } from './email.js';
 
 const AUD_EMPRESA = 'klok-empresa';
@@ -78,6 +79,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
         esqueci: criarLimitador({ max: 5, janelaMs: 60 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
         redefinir: criarLimitador({ max: 20, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
         paginaRedefinicao: criarLimitador({ max: 30, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_GENERICA }),
+        adminLogin: criarLimitador({ max: 10, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN }),
     };
 
     async function gerarTokenEmpresa(usuario, empresa) {
@@ -147,6 +149,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
     };
 
     app.use('/api/auth', criarRotaAuth(deps));
+    app.use('/api/admin', criarRotaAdmin(deps));
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
     app.use('/api/coordenadores', criarRotaCoordenadores(deps));
