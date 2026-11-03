@@ -55,8 +55,8 @@ Ordem aprovada, cada bloco com seu design e seu plano.
 - B. Dependências e headers (#15). Feito no PR #22, issue fechada.
 - C. Multiempresa parte 1: catálogo, banco por empresa, admin e painel básico
   (#30). Implementada na branch `feat/empresas-parte-1`, com o plano em
-  `docs/superpowers/plans/2026-11-02-empresas-parte-1.md`; falta abrir o PR.
-  O login por empresa entrou no app e o autocadastro ficou fechado (403).
+  `docs/superpowers/plans/2026-11-02-empresas-parte-1.md` e o PR #34 aberto com
+  a CI verde. O login por empresa entrou no app e o autocadastro ficou fechado (403).
 - D. Multiempresa parte 2: pedido de funcionário com aprovação, aviso no app e
   email (#19, reaberta como #31). Design original em
   `docs/superpowers/specs/2026-10-13-pedido-funcionario-aprovacao-design.md`,
