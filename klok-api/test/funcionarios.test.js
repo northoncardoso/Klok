@@ -3,11 +3,7 @@ import assert from 'node:assert/strict';
 import { iniciarApp, logar, COORDENADOR_SENHA } from './helpers.js';
 
 async function registrarFuncionario(s, usuario) {
-    await fetch(`${s.baseUrl}/api/auth/registrar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ usuario, senha: '123456', nome: 'Funcionario Teste' }),
-    });
+    s.banco.criarUsuarioLocal(usuario, '123456', 'Funcionario Teste');
     return logar(s.baseUrl, usuario, '123456');
 }
 

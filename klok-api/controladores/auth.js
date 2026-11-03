@@ -7,7 +7,7 @@ import {
     senha as senhaDe,
     texto,
 } from '../validacao.js';
-import { MINIMO_SENHA, validarNovoCoordenador } from './coordenadores.js';
+import { MINIMO_SENHA } from './coordenadores.js';
 
 const TOKEN_HEX = /^[0-9a-f]{64}$/;
 
@@ -28,50 +28,15 @@ function escaparHtml(valor) {
         .replace(/'/g, '&#39;');
 }
 
-export function criarControladoresAuth({ banco, gerarToken, googleClient, enviarEmail }) {
-    function statusCoordenador(req, res) {
-        res.json({ cadastrado: banco.existeCoordenador() });
-    }
-
-    async function criarPrimeiroCoordenador(req, res) {
-        if (banco.existeCoordenador()) {
-            return res.status(409).json({
-                erro: 'O coordenador já foi cadastrado. Faça login com ele.',
-            });
-        }
-        const resultado = validarNovoCoordenador(banco, req.body);
-        if (resultado.erro) {
-            return res.status(resultado.status).json({ erro: resultado.erro });
-        }
-        const { usuario, senha, nome, email, numero } = resultado.dados;
-        const criado = banco.criarCoordenador(usuario, senha, nome, email, numero);
-        const token = await gerarToken(criado);
-        res.status(201).json({ token, tipo: criado.tipo, nome: criado.usuario, id: criado.id });
-    }
-
+export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviarEmail }) {
     function registrar(req, res) {
-        const usuarioLimpo = texto(req.body?.usuario, 'usuario');
-        const senhaLimpa = senhaDe(req.body?.senha);
-        const nomeLimpo = texto(req.body?.nome, 'nome');
-
-        if (!usuarioLimpo || !semCaractereDeControle(usuarioLimpo)) {
-            return res.status(400).json({ erro: 'Informe um nome de usuário válido' });
-        }
-        if (senhaLimpa.length < MINIMO_SENHA) {
-            return res.status(400).json({ erro: `A senha deve ter ao menos ${MINIMO_SENHA} caracteres` });
-        }
-        if (banco.buscarUsuarioPorLogin(usuarioLimpo)) {
-            return res.status(409).json({ erro: 'Usuário já existe' });
-        }
-        try {
-            banco.criarUsuarioLocal(usuarioLimpo, senhaLimpa, nomeLimpo || usuarioLimpo);
-            res.status(201).json({ sucesso: true, mensagem: 'Usuário cadastrado' });
-        } catch {
-            res.status(409).json({ erro: 'Usuário já existe ou dados inválidos' });
-        }
+        res.status(403).json({
+            erro: 'O cadastro está temporariamente fechado. Peça ao coordenador da sua empresa para criar seu acesso.',
+        });
     }
 
     async function login(req, res) {
+        const banco = req.banco;
         const usuarioLimpo = texto(req.body?.usuario, 'usuario');
         const senhaLimpa = senhaDe(req.body?.senha);
         if (!usuarioLimpo || !senhaLimpa) {
@@ -81,11 +46,12 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         if (!encontrado) {
             return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
         }
-        const token = await gerarToken(encontrado);
+        const token = await gerarTokenEmpresa(encontrado, req.empresa);
         res.json({ token, tipo: encontrado.tipo, nome: encontrado.usuario, id: encontrado.id });
     }
 
     async function loginGoogle(req, res) {
+        const banco = req.banco;
         const idToken = texto(req.body?.idToken, 'token');
         if (!idToken) return res.status(400).json({ erro: 'Token do Google ausente' });
         try {
@@ -101,20 +67,21 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
                 texto(payload?.name, 'nome'),
                 emailNormalizado(payload?.email)
             );
-            const token = await gerarToken(usuario);
+            const token = await gerarTokenEmpresa(usuario, req.empresa);
             res.json({ token, tipo: usuario.tipo, nome: texto(payload?.name, 'nome'), id: usuario.id });
         } catch {
             res.status(401).json({ erro: 'Falha na autenticação com Google' });
         }
     }
 
-    function dadosDeUsuario(usuario) {
+    function dadosDeUsuario(banco, usuario) {
         const funcionario =
             usuario.funcionarioId != null ? banco.buscarFuncionario(usuario.funcionarioId) : null;
         return {
             id: usuario.id,
             usuario: usuario.usuario,
             tipo: usuario.tipo,
+            empresa: usuario.empresa,
             funcionarioId: usuario.funcionarioId ?? null,
             hasSenha: !!usuario.senhaHash,
             nome: funcionario?.nome ?? (usuario.nome || usuario.usuario),
@@ -124,10 +91,11 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
     }
 
     function eu(req, res) {
-        res.json(dadosDeUsuario(req.usuario));
+        res.json(dadosDeUsuario(req.banco, req.usuario));
     }
 
     function atualizarDados(req, res) {
+        const banco = req.banco;
         const nomeLimpo = texto(req.body?.nome, 'nome') || req.usuario.usuario;
         const numeroLimpo = texto(req.body?.numero, 'numero');
         const emailLimpo = emailNormalizado(req.body?.email);
@@ -144,10 +112,11 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         } else {
             banco.atualizarDadosUsuarios(req.usuario.id, nomeLimpo, numeroLimpo, emailLimpo);
         }
-        res.json(dadosDeUsuario(banco.buscarUsuarioPorId(req.usuario.id)));
+        res.json(dadosDeUsuario(banco, banco.buscarUsuarioPorId(req.usuario.id)));
     }
 
     function alterarSenha(req, res) {
+        const banco = req.banco;
         const senhaAtual = senhaDe(req.body?.senhaAtual);
         const senhaNova = senhaDe(req.body?.senhaNova);
         if (!senhaAtual || !senhaNova) {
@@ -176,6 +145,7 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
     };
 
     async function esqueciSenha(req, res) {
+        const banco = req.banco;
         const email = emailNormalizado(req.body?.email);
         if (!emailValido(email)) {
             return res.status(400).json({ erro: 'Informe um email válido' });
@@ -189,8 +159,8 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         const expiraEm = new Date(Date.now() + 30 * 60 * 1000).toISOString();
         banco.criarRecuperacao(usuario.id, tokenHash, expiraEm);
         const base = (process.env.URL_BASE || 'http://localhost:3000').replace(/\/+$/, '');
-        const url = `${base}/redefinir-senha/${token}`;
-        const urlApp = `klok://redefinir-senha?token=${token}`;
+        const url = `${base}/redefinir-senha/${req.empresa}/${token}`;
+        const urlApp = `klok://redefinir-senha?empresa=${req.empresa}&token=${token}`;
         await enviarEmail({ para: email, url, urlApp });
 
         if (ehProducao() || smtpCompleto()) {
@@ -200,6 +170,7 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
     }
 
     function paginaRedefinicao(req, res) {
+        const banco = req.banco;
         const token = texto(req.params.token, 'token');
         const tokenHash = createHash('sha256').update(token).digest('hex');
         const registro = banco.buscarRecuperacaoPorToken(tokenHash);
@@ -219,11 +190,12 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         }
         const tokenSeguro = escaparHtml(token);
         return res.send(
-            `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Redefinir senha no Klok</title>${estilo}</head><body><main><h1>Redefinir sua senha Klok</h1><p>Confirmamos que é você. Toque no botão para abrir o app Klok e definir a nova senha.</p><a class="botao" href="klok://redefinir-senha?token=${tokenSeguro}">Abrir o app Klok</a><p class="dica">Se nada acontecer, confirme que o app Klok está instalado e toque no link novamente.</p></main></body></html>`
+            `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Redefinir senha no Klok</title>${estilo}</head><body><main><h1>Redefinir sua senha Klok</h1><p>Confirmamos que é você. Toque no botão para abrir o app Klok e definir a nova senha.</p><a class="botao" href="klok://redefinir-senha?empresa=${escaparHtml(req.empresa)}&token=${tokenSeguro}">Abrir o app Klok</a><p class="dica">Se nada acontecer, confirme que o app Klok está instalado e toque no link novamente.</p></main></body></html>`
         );
     }
 
     function redefinirSenha(req, res) {
+        const banco = req.banco;
         const token = texto(req.body?.token, 'token');
         const novaSenha = senhaDe(req.body?.novaSenha);
         if (!token || !novaSenha) {
@@ -245,5 +217,5 @@ export function criarControladoresAuth({ banco, gerarToken, googleClient, enviar
         res.json({ sucesso: true, mensagem: 'Senha redefinida com sucesso. Faça login com a nova senha.' });
     }
 
-    return { statusCoordenador, criarPrimeiroCoordenador, registrar, login, loginGoogle, eu, atualizarDados, alterarSenha, esqueciSenha, paginaRedefinicao, redefinirSenha };
+    return { registrar, login, loginGoogle, eu, atualizarDados, alterarSenha, esqueciSenha, paginaRedefinicao, redefinirSenha };
 }
