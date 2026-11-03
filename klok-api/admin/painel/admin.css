@@ -1,0 +1,180 @@
+:root {
+    color-scheme: light;
+    --fundo: #f5f6f8;
+    --cartao: #ffffff;
+    --texto: #1d2330;
+    --suave: #5b6473;
+    --borda: #d6dae2;
+    --acento: #1f6feb;
+    --acento-forte: #1757c2;
+    --erro: #b42318;
+    --ok: #18794e;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.5;
+}
+
+.topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--cartao);
+    border-bottom: 1px solid var(--borda);
+}
+
+.topo h1 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 1.25rem;
+    display: grid;
+    gap: 1.25rem;
+}
+
+.cartao {
+    background: var(--cartao);
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    padding: 1.25rem;
+}
+
+.cartao h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1.1rem;
+}
+
+.cartao h3 {
+    margin: 1.25rem 0 0.25rem;
+    font-size: 1rem;
+}
+
+.dica {
+    margin: 0 0 0.75rem;
+    color: var(--suave);
+    font-size: 0.9rem;
+}
+
+.formulario {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.75rem;
+}
+
+.formulario label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+input {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    font: inherit;
+    background: #fff;
+    color: inherit;
+}
+
+input:focus {
+    outline: 2px solid var(--acento);
+    outline-offset: 1px;
+}
+
+button {
+    justify-self: start;
+    margin-top: 0.5rem;
+    padding: 0.55rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--acento);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+button:hover {
+    background: var(--acento-forte);
+}
+
+button.secundario {
+    background: #fff;
+    color: var(--acento);
+    border-color: var(--borda);
+}
+
+button.secundario:hover {
+    background: #eef3fd;
+}
+
+.tabela-rolagem {
+    overflow-x: auto;
+    margin-top: 0.75rem;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+th,
+td {
+    padding: 0.5rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid var(--borda);
+    white-space: nowrap;
+}
+
+th {
+    color: var(--suave);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+td button {
+    margin: 0;
+    padding: 0.35rem 0.7rem;
+}
+
+.mensagem {
+    min-height: 1.25rem;
+    margin: 0.75rem 0 0;
+    font-size: 0.9rem;
+}
+
+.mensagem[data-tipo="ok"] {
+    color: var(--ok);
+}
+
+.mensagem[data-tipo="erro"] {
+    color: var(--erro);
+}
+
+#bloco-painel {
+    display: grid;
+    gap: 1.25rem;
+}
+
+#bloco-painel[hidden],
+#bloco-empresa[hidden],
+#bloco-login[hidden],
+#botao-sair[hidden] {
+    display: none;
+}

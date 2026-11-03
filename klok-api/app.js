@@ -1,5 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SignJWT } from 'jose';
 import { OAuth2Client } from 'google-auth-library';
 import {
@@ -158,6 +160,18 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
         limitadores.paginaRedefinicao,
         resolverEmpresa,
         criarControladoresAuth(deps).paginaRedefinicao
+    );
+
+    // O painel é HTML, JS e CSS sem build. A rota explícita vem antes do
+    // estático para `/admin` responder o index sem redirecionar para `/admin/`.
+    const painelDir = fileURLToPath(new URL('./admin/painel', import.meta.url));
+    app.get('/admin', (req, res) => res.sendFile(join(painelDir, 'index.html')));
+    app.use(
+        '/admin',
+        express.static(painelDir, {
+            // O painel é interno e guarda o token em sessionStorage: nada de cache.
+            setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+        })
     );
 
     app.use('/api', (req, res) => {
