@@ -87,18 +87,25 @@ test('email e número do coordenador reaparecem no próprio perfil', async (t) =
     assert.equal(eu.numero, COORDENADOR.numero);
 });
 
-test('o autocadastro está fechado e não cria usuário', async (t) => {
-    const s = await iniciarApp();
+test('o autocadastro cria pedido e não cria usuário direto', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
     t.after(() => s.fechar());
 
     const resp = await fetch(`${s.baseUrl}/api/auth/registrar`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ empresa: EMPRESA, usuario: 'ana', senha: '123456' }),
+        body: JSON.stringify({
+            empresa: EMPRESA,
+            usuario: 'ana',
+            senha: '123456',
+            nome: 'Ana',
+            email: 'ana@teste.com',
+        }),
     });
-    assert.equal(resp.status, 403);
-    assert.match((await resp.json()).erro, /temporariamente fechado/i);
+    assert.equal(resp.status, 201);
+    assert.equal((await resp.json()).token, undefined);
     assert.equal(s.banco.buscarUsuarioPorLogin('ana'), undefined);
+    assert.equal(s.banco.contarSolicitacoesPendentes(), 1);
 });
 
 test('login local devolve token de empresa', async (t) => {

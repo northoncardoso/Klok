@@ -8,6 +8,7 @@ import {
     texto,
 } from '../validacao.js';
 import { MINIMO_SENHA } from './coordenadores.js';
+import { avisarCoordenadores } from '../avisos.js';
 
 const TOKEN_HEX = /^[0-9a-f]{64}$/;
 
@@ -29,9 +30,47 @@ function escaparHtml(valor) {
 }
 
 export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviarEmail }) {
-    function registrar(req, res) {
-        res.status(403).json({
-            erro: 'O cadastro está temporariamente fechado. Peça ao coordenador da sua empresa para criar seu acesso.',
+    async function registrar(req, res) {
+        const banco = req.banco;
+        const usuario = texto(req.body?.usuario, 'usuario');
+        const senhaLimpa = senhaDe(req.body?.senha);
+        const nome = texto(req.body?.nome, 'nome') || usuario;
+        const email = emailNormalizado(req.body?.email);
+
+        if (!usuario || !semCaractereDeControle(usuario)) {
+            return res.status(400).json({ erro: 'Informe um nome de usuário válido' });
+        }
+        if (senhaLimpa.length < MINIMO_SENHA) {
+            return res.status(400).json({ erro: `A senha deve ter ao menos ${MINIMO_SENHA} caracteres` });
+        }
+        if (!emailValido(email)) {
+            return res.status(400).json({ erro: 'Informe um email válido' });
+        }
+        if (banco.buscarUsuarioPorLogin(usuario) || banco.buscarSolicitacaoPorUsuario(usuario)) {
+            return res.status(409).json({ erro: 'Este nome de usuário já está em uso' });
+        }
+
+        const criada = banco.criarSolicitacao({
+            usuario,
+            senhaHash: banco.criarHashSenha(senhaLimpa),
+            nome,
+            email,
+            numero: '',
+            googleId: null,
+        });
+        if (criada.erro) return res.status(criada.status).json({ erro: criada.erro });
+
+        await avisarCoordenadores({
+            banco,
+            enviarEmail,
+            empresa: req.empresa,
+            nome,
+            identificacao: usuario,
+            email,
+        });
+        res.status(201).json({
+            sucesso: true,
+            mensagem: 'Seu cadastro foi enviado. Aguarde a aprovação de um coordenador da sua empresa.',
         });
     }
 
