@@ -116,3 +116,27 @@ test('migração 7 cria a coluna empresa e grava nos usuários', () => {
     assert.equal(coordenador.empresa, 'ACME');
     assert.equal(banco.criarUsuarioLocal('ana', 'senha-1234', 'Ana').empresa, 'ACME');
 });
+
+test('migração 8 cria solicitacoes com índices parciais', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'klok-migra-pedidos-'));
+    const caminho = join(dir, 'klok.db');
+    const bruto = new DatabaseSync(caminho);
+    for (const migracao of MIGRACOES.slice(0, 7)) bruto.exec(migracao.sql);
+    bruto.exec('PRAGMA user_version = 7');
+    bruto.close();
+
+    const banco = criarBanco(caminho);
+    assert.equal(banco.userVersion(), MIGRACOES.length);
+    const tabela = banco.db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'solicitacoes'")
+        .get();
+    assert.equal(tabela.name, 'solicitacoes');
+    const indices = banco.db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'solicitacoes'")
+        .all()
+        .map((i) => i.name)
+        .sort();
+    assert.deepEqual(indices, ['idx_solicitacoes_google', 'idx_solicitacoes_status', 'idx_solicitacoes_usuario']);
+    banco.db.close();
+    rmSync(dir, { recursive: true, force: true });
+});

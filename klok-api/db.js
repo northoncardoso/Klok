@@ -91,6 +91,29 @@ export const MIGRACOES = [
             CREATE INDEX IF NOT EXISTS idx_usuarios_empresa ON usuarios(empresa);
         `,
     },
+    {
+        versao: 8,
+        nome: 'pedidos de cadastro por empresa',
+        sql: `
+            CREATE TABLE IF NOT EXISTS solicitacoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario TEXT,
+                senhaHash TEXT,
+                nome TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL,
+                numero TEXT NOT NULL DEFAULT '',
+                googleId TEXT,
+                status TEXT NOT NULL DEFAULT 'pendente',
+                criadoEm TEXT NOT NULL,
+                decididoEm TEXT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_solicitacoes_usuario
+                ON solicitacoes(usuario) WHERE usuario IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_solicitacoes_google
+                ON solicitacoes(googleId) WHERE googleId IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_solicitacoes_status ON solicitacoes(status);
+        `,
+    },
 ];
 
 export function criarBanco(caminho = 'klok.db', opcoes = {}) {
@@ -304,6 +327,108 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         ).all();
     }
 
+    function ehConflitoDeUnicidade(erro) {
+        return erro?.errcode === 2067;
+    }
+
+    function semSenha(linha) {
+        if (!linha) return linha;
+        const { senhaHash, ...resto } = linha;
+        return resto;
+    }
+
+    function criarSolicitacao({ usuario, senhaHash, nome, email, numero, googleId }) {
+        const login = usuario ? paraTexto(usuario) : null;
+        const contaGoogle = googleId ? paraTexto(googleId) : null;
+        if (!login && !contaGoogle) {
+            return { erro: 'Informe usuário ou conta Google', status: 400 };
+        }
+        try {
+            const r = db.prepare(
+                `INSERT INTO solicitacoes (usuario, senhaHash, nome, email, numero, googleId, status, criadoEm)
+                 VALUES (?, ?, ?, ?, ?, ?, 'pendente', ?)`
+            ).run(login, senhaHash ?? null, paraTexto(nome), paraTexto(email), paraTexto(numero), contaGoogle, new Date().toISOString());
+            return semSenha(buscarSolicitacaoPorId(r.lastInsertRowid));
+        } catch (e) {
+            if (ehConflitoDeUnicidade(e)) {
+                return { erro: 'Este nome de usuário já está em uso', status: 409 };
+            }
+            throw e;
+        }
+    }
+
+    function listarSolicitacoes(status = 'pendente') {
+        return db.prepare('SELECT * FROM solicitacoes WHERE status = ? ORDER BY criadoEm').all(status).map(semSenha);
+    }
+
+    function buscarSolicitacaoPorId(id) {
+        return semSenha(db.prepare('SELECT * FROM solicitacoes WHERE id = ?').get(id));
+    }
+
+    function buscarSolicitacaoPorUsuario(usuario) {
+        return semSenha(db.prepare('SELECT * FROM solicitacoes WHERE usuario = ?').get(paraTexto(usuario)));
+    }
+
+    function buscarSolicitacaoPorGoogleId(googleId) {
+        return semSenha(db.prepare('SELECT * FROM solicitacoes WHERE googleId = ?').get(paraTexto(googleId)));
+    }
+
+    function contarSolicitacoesPendentes() {
+        return Number(db.prepare("SELECT COUNT(*) AS total FROM solicitacoes WHERE status = 'pendente'").get().total);
+    }
+
+    function validarSenhaSolicitacao(usuario, senha) {
+        if (typeof senha !== 'string') return null;
+        const linha = db.prepare('SELECT * FROM solicitacoes WHERE usuario = ?').get(paraTexto(usuario));
+        if (!linha || !linha.senhaHash) return null;
+        if (!linha.senhaHash.startsWith(PREFIXO_HASH)) return null;
+        return verificarSenha(senha, linha.senhaHash) ? semSenha(linha) : null;
+    }
+
+    function aprovarSolicitacao(id) {
+        // A linha crua é necessária para copiar o senhaHash; a versão pública sai sem ele.
+        const cru = db.prepare('SELECT * FROM solicitacoes WHERE id = ?').get(id);
+        if (!cru) return { erro: 'Pedido não encontrado', status: 404 };
+        if (cru.status !== 'pendente') return { erro: 'Este pedido já foi decidido', status: 409 };
+        if (cru.usuario && buscarUsuarioPorLogin(cru.usuario)) {
+            return { erro: 'Este nome de usuário já está em uso', status: 409 };
+        }
+        if (cru.googleId && buscarUsuarioPorGoogleId(cru.googleId)) {
+            return { erro: 'Esta conta Google já está em uso', status: 409 };
+        }
+
+        db.exec('BEGIN');
+        try {
+            const funcionarioId = criarFuncionario(cru.nome || cru.usuario || 'Sem nome', cru.numero, cru.email);
+            const r = db.prepare(
+                `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, googleId, empresa)
+                 VALUES (?, ?, 'funcionario', ?, ?, ?)`
+            ).run(cru.usuario ?? null, cru.senhaHash ?? null, funcionarioId, cru.googleId ?? null, empresa);
+            db.prepare('UPDATE solicitacoes SET status = ?, decididoEm = ? WHERE id = ?')
+                .run('aprovado', new Date().toISOString(), id);
+            db.exec('COMMIT');
+            return {
+                funcionario: buscarFuncionario(funcionarioId),
+                usuario: semSenha(buscarUsuarioPorId(r.lastInsertRowid)),
+            };
+        } catch (e) {
+            db.exec('ROLLBACK');
+            if (ehConflitoDeUnicidade(e)) {
+                return { erro: 'Este nome de usuário já está em uso', status: 409 };
+            }
+            throw e;
+        }
+    }
+
+    function recusarSolicitacao(id) {
+        const pedido = buscarSolicitacaoPorId(id);
+        if (!pedido) return { erro: 'Pedido não encontrado', status: 404 };
+        if (pedido.status !== 'pendente') return { erro: 'Este pedido já foi decidido', status: 409 };
+        db.prepare('UPDATE solicitacoes SET status = ?, decididoEm = ? WHERE id = ?')
+            .run('recusado', new Date().toISOString(), id);
+        return { solicitacao: buscarSolicitacaoPorId(id) };
+    }
+
     return {
         db,
         userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
@@ -333,5 +458,14 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         baterPonto,
         listarPontos,
         listarTodosPontos,
+        criarSolicitacao,
+        listarSolicitacoes,
+        buscarSolicitacaoPorId,
+        buscarSolicitacaoPorUsuario,
+        buscarSolicitacaoPorGoogleId,
+        contarSolicitacoesPendentes,
+        validarSenhaSolicitacao,
+        aprovarSolicitacao,
+        recusarSolicitacao,
     };
 }
