@@ -162,7 +162,7 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         const url = `${base}/redefinir-senha/${req.empresa}/${token}`;
         const urlApp = `klok://redefinir-senha?empresa=${req.empresa}&token=${token}`;
         const assunto = 'Klok: Redefinição de senha';
-        const texto = [
+        const corpo = [
             'Recebemos um pedido para redefinir sua senha no app Klok.',
             'Abra o link abaixo para confirmar que é você e definir uma nova senha:',
             '',
@@ -171,7 +171,7 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
             '',
             'Este link é válido por 30 minutos. Se você não pediu, ignore este email.',
         ].join('\n');
-        await enviarEmail({ para: email, assunto, texto });
+        await enviarEmail({ para: email, assunto, texto: corpo });
 
         if (ehProducao() || smtpCompleto()) {
             return res.json(MENSAGEM_GENERICA);

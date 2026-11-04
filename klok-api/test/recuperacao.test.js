@@ -102,7 +102,7 @@ test('link só pode ser usado uma vez', async (t) => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ empresa: EMPRESA, email: 'mila@mail.com' }),
     });
-    const tokenReset = emailsEnviados[0].match(/token=([0-9a-f]{64})/)[1];
+    const tokenReset = emailsEnviados[0].match(/klok:\/\/redefinir-senha\?empresa=TESTE&token=([0-9a-f]{64})/)[1];
 
     const primeira = await fetch(`${s.baseUrl}/api/auth/redefinir-senha`, {
         method: 'POST',
