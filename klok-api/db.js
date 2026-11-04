@@ -351,10 +351,14 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
             return semSenha(buscarSolicitacaoPorId(r.lastInsertRowid));
         } catch (e) {
             if (ehConflitoDeUnicidade(e)) {
-                return { erro: 'Este nome de usuário já está em uso', status: 409 };
+                return { erro: mensagemDeConflito(contaGoogle), status: 409 };
             }
             throw e;
         }
+    }
+
+    function mensagemDeConflito(contaGoogle) {
+        return contaGoogle ? 'Esta conta Google já está em uso' : 'Este nome de usuário já está em uso';
     }
 
     function listarSolicitacoes(status = 'pendente') {
@@ -414,7 +418,7 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         } catch (e) {
             db.exec('ROLLBACK');
             if (ehConflitoDeUnicidade(e)) {
-                return { erro: 'Este nome de usuário já está em uso', status: 409 };
+                return { erro: mensagemDeConflito(cru.googleId), status: 409 };
             }
             throw e;
         }

@@ -24,7 +24,20 @@ test('criarSolicitacao devolve pendente e sem senhaHash', () => {
         assert.equal(linha.senhaHash, undefined, 'listagem não pode vazar senhaHash');
     }
     assert.equal(banco.buscarSolicitacaoPorUsuario('ana').senhaHash, undefined);
-    assert.equal(banco.buscarSolicitacaoPorGoogleId('g-1'), undefined);
+    banco.db.close();
+});
+
+test('busca por googleId e duplicidade de conta Google', () => {
+    const banco = criarBanco(':memory:', { empresa: 'ACME' });
+    const pedido = novoSolicitacao(banco, { usuario: null, senhaHash: null, googleId: 'g-1' });
+    const achado = banco.buscarSolicitacaoPorGoogleId('g-1');
+    assert.equal(achado.id, pedido.id);
+    assert.equal(achado.senhaHash, undefined);
+    assert.equal(banco.buscarSolicitacaoPorGoogleId('g-2'), undefined);
+    const repetido = novoSolicitacao(banco, { usuario: null, senhaHash: null, googleId: 'g-1' });
+    assert.equal(repetido.status, 409);
+    assert.match(repetido.erro, /conta Google/);
+    assert.equal(banco.contarSolicitacoesPendentes(), 1);
     banco.db.close();
 });
 
@@ -68,13 +81,24 @@ test('aprovarSolicitacao cria funcionário e usuário com a empresa', () => {
     banco.db.close();
 });
 
-test('aprovarSolicitacao recusa pedido já decidido e nome tomado', () => {
+test('aprovarSolicitacao recusa pedido já decidido', () => {
+    const banco = criarBanco(':memory:', { empresa: 'ACME' });
+    const pedido = novoSolicitacao(banco);
+    assert.equal(banco.aprovarSolicitacao(pedido.id).funcionario.nome, 'Ana');
+    assert.equal(banco.aprovarSolicitacao(pedido.id).status, 409);
+    assert.equal(banco.buscarSolicitacaoPorId(pedido.id).status, 'aprovado');
+    assert.equal(banco.listarFuncionarios().length, 1);
+    banco.db.close();
+});
+
+test('aprovarSolicitacao recusa nome tomado sem criar funcionário', () => {
     const banco = criarBanco(':memory:', { empresa: 'ACME' });
     const pedido = novoSolicitacao(banco);
     banco.criarUsuarioLocal('ana', 'outra-senha', 'Ana');
     const r = banco.aprovarSolicitacao(pedido.id);
     assert.equal(r.status, 409);
     assert.equal(banco.buscarSolicitacaoPorId(pedido.id).status, 'pendente');
+    assert.equal(banco.listarFuncionarios().length, 1, 'nenhum funcionário fantasma');
     banco.db.close();
 });
 
@@ -92,6 +116,8 @@ test('recusarSolicitacao grava decisão e mantém no histórico', () => {
     const pedido = novoSolicitacao(banco);
     assert.equal(banco.recusarSolicitacao(pedido.id).solicitacao.status, 'recusado');
     assert.ok(banco.buscarSolicitacaoPorId(pedido.id).decididoEm);
+    assert.equal(banco.contarSolicitacoesPendentes(), 0);
+    assert.equal(banco.listarSolicitacoes('recusado').length, 1);
     assert.equal(banco.recusarSolicitacao(pedido.id).status, 409);
     assert.equal(banco.recusarSolicitacao(999).status, 404);
     banco.db.close();
