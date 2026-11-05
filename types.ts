@@ -50,6 +50,16 @@ export type Coordenador = {
     email: string;
 };
 
+export type Solicitacao = {
+    id: number;
+    usuario: string | null;
+    nome: string;
+    email: string;
+    numero: string;
+    criadoEm: string;
+    status: 'pendente' | 'aprovado' | 'recusado';
+};
+
 export type UsuarioInfo = {
     id: number;
     usuario: string;

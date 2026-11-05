@@ -9,6 +9,7 @@ import type {
     Ponto,
     RegistroUsuario,
     Sessao,
+    Solicitacao,
     UsuarioInfo,
 } from './types';
 
@@ -99,8 +100,14 @@ export const api = {
         requisicao<Coordenador>('/api/coordenadores', 'POST', dados, token),
     login: (empresa: string, usuario: string, senha: string): Promise<Sessao> =>
         requisicao<Sessao>('/api/auth/login', 'POST', { empresa, usuario, senha }),
-    registrar: (empresa: string, usuario: string, senha: string, nome: string): Promise<RegistroUsuario> =>
-        requisicao<RegistroUsuario>('/api/auth/registrar', 'POST', { empresa, usuario, senha, nome }),
+    registrar: (
+        empresa: string,
+        usuario: string,
+        senha: string,
+        nome: string,
+        email: string
+    ): Promise<RegistroUsuario> =>
+        requisicao<RegistroUsuario>('/api/auth/registrar', 'POST', { empresa, usuario, senha, nome, email }),
     loginGoogle: (empresa: string, idToken: string): Promise<Sessao> =>
         requisicao<Sessao>('/api/auth/google', 'POST', { empresa, idToken }),
     me: (token: string): Promise<UsuarioInfo> =>
@@ -127,4 +134,17 @@ export const api = {
         requisicao<Ponto[]>('/api/pontos/meus', 'GET', null, token),
     todosPontos: (token: string): Promise<Ponto[]> =>
         requisicao<Ponto[]>('/api/pontos', 'GET', null, token),
+    listarSolicitacoes: (status: string, token: string): Promise<Solicitacao[]> =>
+        requisicao<Solicitacao[]>(
+            `/api/solicitacoes?status=${encodeURIComponent(status)}`,
+            'GET',
+            null,
+            token
+        ),
+    contarSolicitacoes: (token: string): Promise<{ pendentes: number }> =>
+        requisicao<{ pendentes: number }>('/api/solicitacoes/contagem', 'GET', null, token),
+    aprovarSolicitacao: (id: number, token: string): Promise<Funcionario> =>
+        requisicao<Funcionario>(`/api/solicitacoes/${id}/aprovar`, 'POST', null, token),
+    recusarSolicitacao: (id: number, token: string): Promise<{ sucesso: boolean }> =>
+        requisicao<{ sucesso: boolean }>(`/api/solicitacoes/${id}/recusar`, 'POST', null, token),
 };

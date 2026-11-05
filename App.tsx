@@ -14,13 +14,14 @@ import estilos from './estilos';
 import HomeScreen from './screens/HomeScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
 import CoordenadoresScreen from './screens/CoordenadoresScreen';
+import SolicitacoesScreen from './screens/SolicitacoesScreen';
 import PontoScreen from './screens/PontoScreen';
 import RedefinirSenhaScreen from './screens/RedefinirSenhaScreen';
 import UsuarioScreen from './screens/UsuarioScreen';
-import { lerSessao, limparSessao, mensagemDeErro, salvarEmpresa, salvarSessao } from './api';
+import { api, lerSessao, limparSessao, mensagemDeErro, salvarEmpresa, salvarSessao } from './api';
 import type { Sessao } from './types';
 
-type Tela = 'Home' | 'Funcionarios' | 'Coordenadores' | 'Bater o ponto' | 'Usuario';
+type Tela = 'Home' | 'Funcionarios' | 'Coordenadores' | 'Solicitacoes' | 'Bater o ponto' | 'Usuario';
 type Portao =
     | { estado: 'carregando' }
     | { estado: 'pronto' }
@@ -55,6 +56,7 @@ export default function App() {
     const [modalSairVisivel, setModalSairVisivel] = useState(false);
     const [redefinicao, setRedefinicao] = useState<Redefinicao | null>(null);
     const [portao, setPortao] = useState<Portao>({ estado: 'carregando' });
+    const [pendentes, setPendentes] = useState(0);
 
     const posicaoMenu = useRef(new Animated.Value(-LARGURA_MENU)).current;
     const opacidadeOverlay = useRef(new Animated.Value(0)).current;
@@ -90,11 +92,28 @@ export default function App() {
         carregarSessao();
     }, []);
 
+    const atualizarContagemSolicitacoes = async () => {
+        if (!sessao || sessao.tipo !== 'coordenador') {
+            setPendentes(0);
+            return;
+        }
+        try {
+            setPendentes((await api.contarSolicitacoes(sessao.token)).pendentes);
+        } catch {
+            setPendentes(0);
+        }
+    };
+
+    useEffect(() => {
+        void atualizarContagemSolicitacoes();
+    }, [sessao?.token, sessao?.tipo]);
+
     const tentarNovamente = () => {
         carregarSessao();
     };
 
     const abrirMenu = () => {
+        void atualizarContagemSolicitacoes();
         setMenuVisivel(true);
         Animated.parallel([
             Animated.timing(posicaoMenu, { toValue: 0, duration: 250, useNativeDriver: true }),
@@ -118,6 +137,7 @@ export default function App() {
     };
 
     const irPara = (tela: Tela) => {
+        if (tela === 'Solicitacoes') void atualizarContagemSolicitacoes();
         setTelaAtual(tela);
         fecharMenu();
     };
@@ -177,6 +197,13 @@ export default function App() {
             case 'Coordenadores':
                 return sessao.tipo === 'coordenador' ? (
                     <CoordenadoresScreen token={sessao.token} />
+                ) : null;
+            case 'Solicitacoes':
+                return sessao.tipo === 'coordenador' ? (
+                    <SolicitacoesScreen
+                        token={sessao.token}
+                        aoAtualizarContagem={atualizarContagemSolicitacoes}
+                    />
                 ) : null;
             case 'Bater o ponto':
                 return <PontoScreen token={sessao.token} />;
@@ -263,6 +290,14 @@ export default function App() {
                         {sessao?.tipo === 'coordenador' && (
                             <TouchableOpacity style={estilos.estilosMenuItemMenu} onPress={() => irPara('Coordenadores')}>
                                 <Text style={estilos.estilosMenuTextoItemMenu}>Coordenadores</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {sessao?.tipo === 'coordenador' && (
+                            <TouchableOpacity style={estilos.estilosMenuItemMenu} onPress={() => irPara('Solicitacoes')}>
+                                <Text style={estilos.estilosMenuTextoItemMenu}>
+                                    {pendentes > 0 ? `Solicitações (${pendentes})` : 'Solicitações'}
+                                </Text>
                             </TouchableOpacity>
                         )}
 

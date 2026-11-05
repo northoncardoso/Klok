@@ -34,6 +34,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
     const [usuario, setUsuario] = useState('');
     const [senha, setSenha] = useState('');
     const [nome, setNome] = useState('');
+    const [email, setEmail] = useState('');
     const [modoCadastro, setModoCadastro] = useState(false);
     const [modoRecuperar, setModoRecuperar] = useState(false);
     const [carregando, setCarregando] = useState(false);
@@ -78,11 +79,15 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         }
         const codigo = empresaPreenchida();
         if (!codigo) return;
+        if (!email.trim()) {
+            Alert.alert('Atenção', 'Informe seu email para receber o aviso de aprovação.');
+            return;
+        }
 
         setCarregando(true);
         try {
             await salvarEmpresa(codigo);
-            await api.registrar(codigo, usuario.trim(), senha, nome.trim());
+            await api.registrar(codigo, usuario.trim(), senha, nome.trim(), email.trim());
             Alert.alert(
                 'Pedido enviado',
                 'Seu cadastro foi enviado. Aguarde a aprovação de um coordenador da empresa.'
@@ -90,6 +95,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             setModoCadastro(false);
             setSenha('');
             setNome('');
+            setEmail('');
         } catch (e) {
             Alert.alert('Erro', mensagemDeErro(e));
         } finally {
@@ -122,7 +128,7 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
             } else if (isErrorWithCode(e) && e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
                 Alert.alert('Erro', 'Google Play Services não disponível.');
             } else {
-                Alert.alert('Erro', 'Falha ao entrar com Google.');
+                Alert.alert('Erro', mensagemDeErro(e));
             }
         } finally {
             setCarregando(false);
@@ -177,6 +183,19 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
                             value={nome}
                             onChangeText={setNome}
                             style={estilos.estilosLoginInput}
+                            placeholderTextColor="gray"
+                        />
+                    )}
+
+                    {modoCadastro && (
+                        <TextInput
+                            placeholder="Email"
+                            value={email}
+                            onChangeText={setEmail}
+                            style={estilos.estilosLoginInput}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
                             placeholderTextColor="gray"
                         />
                     )}
