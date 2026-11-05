@@ -62,7 +62,7 @@ Ordem aprovada, cada bloco com seu design e seu plano.
   com o plano em
   `docs/superpowers/plans/2026-11-03-empresas-parte-2-autocadastro.md`. O
   autocadastro local e o login Google viram pedido pendente, o coordenador decide
-  na tela de Solicitações e o menu mostra o contador.
+  na tela de Solicitações e o menu mostra o contador. PR #36.
 - E. Multiempresa parte 3: suporte e resumo no painel (#32), com funcionários,
   coordenadores, pontos, pedidos e backup.
 - F. Screenshots e README (#8).
