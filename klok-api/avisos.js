@@ -8,7 +8,7 @@ export function textoNovoPedido({ empresa, nome, identificacao, email }) {
         `Identificação: ${identificacao}`,
         `Email: ${email}`,
         '',
-        'Abra o app Klok, entre como coordenador e decida em Solicitacoes.',
+        'Abra o app Klok, entre como coordenador e decida em Solicitações.',
     ].join('\n');
 }
 
