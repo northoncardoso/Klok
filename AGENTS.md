@@ -26,7 +26,7 @@ Plano de implementação em `docs/superpowers/plans/`.
 
 ## Como rodar e testar
 
-- Backend: `cd klok-api` e `npm test`. Hoje são 122 testes. Exige Node 22.5 ou mais
+- Backend: `cd klok-api` e `npm test`. Hoje são 123 testes. Exige Node 22.5 ou mais
   novo por causa do `node:sqlite`. Se o Node do sistema for antigo, use
   `mise use node@22` antes.
 - App: `npm run typecheck`. Rodar com `npx expo start` ou `npx expo run:android`.
