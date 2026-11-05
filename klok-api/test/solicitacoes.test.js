@@ -274,3 +274,40 @@ test('aprovação de conta Google avisa e libera o login Google', async (t) => {
     assert.equal(login.status, 200);
     assert.ok((await login.json()).token);
 });
+
+test('pedido aprovado sem usuário ativo não vira mensagem de recusa', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+    const id = s.banco.buscarSolicitacaoPorUsuario('ana').id;
+    s.banco.aprovarSolicitacao(id);
+    s.banco.db.prepare('DELETE FROM usuarios WHERE usuario = ?').run('ana');
+
+    const r = await pedidoLogin(s.baseUrl, { empresa: EMPRESA, usuario: 'ana', senha: '1234' });
+    assert.equal(r.status, 401);
+    assert.equal(r.corpo.erro, 'Usuário ou senha incorretos');
+});
+
+test('pedido Google aprovado sem usuário ativo não responde conflito', async (t) => {
+    const s = await iniciarApp({
+        clienteGoogle: googleFake({ sub: 'g-4', name: 'Gabi Quatro', email: 'gabi4@teste.com' }),
+        enviarEmail: async () => {},
+    });
+    t.after(() => s.fechar());
+    await fetch(`${s.baseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
+    });
+    const id = s.banco.buscarSolicitacaoPorGoogleId('g-4').id;
+    s.banco.aprovarSolicitacao(id);
+    s.banco.db.prepare('DELETE FROM usuarios WHERE googleId = ?').run('g-4');
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
+    });
+    assert.equal(resp.status, 403);
+    assert.match((await resp.json()).erro, /já foi decidido/);
+});
