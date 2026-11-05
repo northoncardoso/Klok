@@ -15,6 +15,7 @@ import { criarRotaAuth } from './rotas/auth.js';
 import { criarRotaFuncionarios } from './rotas/funcionarios.js';
 import { criarRotaPontos } from './rotas/pontos.js';
 import { criarRotaCoordenadores } from './rotas/coordenadores.js';
+import { criarRotaSolicitacoes } from './rotas/solicitacoes.js';
 import { criarControladoresAuth } from './controladores/auth.js';
 import { criarRotaAdmin } from './admin/rotas.js';
 import { criarEnviarEmail } from './email.js';
@@ -155,6 +156,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
     app.use('/api/funcionarios', criarRotaFuncionarios(deps));
     app.use('/api/pontos', criarRotaPontos(deps));
     app.use('/api/coordenadores', criarRotaCoordenadores(deps));
+    app.use('/api/solicitacoes', criarRotaSolicitacoes(deps));
     app.get(
         '/redefinir-senha/:empresa/:token',
         limitadores.paginaRedefinicao,

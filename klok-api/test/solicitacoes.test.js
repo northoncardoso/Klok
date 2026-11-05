@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { iniciarApp, pedidoLogin, EMPRESA, COORDENADOR } from './helpers.js';
+import { iniciarApp, logar, pedidoLogin, EMPRESA, COORDENADOR, COORDENADOR_SENHA } from './helpers.js';
 
 async function cadastrar(baseUrl, corpo = {}) {
     const resp = await fetch(`${baseUrl}/api/auth/registrar`, {
@@ -131,4 +131,115 @@ test('login Google sem email não cria pedido', async (t) => {
     });
     assert.equal(resp.status, 400);
     assert.equal(s.banco.contarSolicitacoesPendentes(), 0);
+});
+
+async function decidir(baseUrl, token, id, acao) {
+    const resp = await fetch(`${baseUrl}/api/solicitacoes/${id}/${acao}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}` },
+    });
+    let corpo = null;
+    try {
+        corpo = await resp.json();
+    } catch {
+        corpo = null;
+    }
+    return { status: resp.status, corpo };
+}
+
+test('coordenador lista, conta, aprova e libera o login', async (t) => {
+    const emails = [];
+    const s = await iniciarApp({ enviarEmail: async (m) => emails.push(m) });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
+
+    const lista = await (await fetch(`${s.baseUrl}/api/solicitacoes`, {
+        headers: { authorization: `Bearer ${token}` },
+    })).json();
+    assert.equal(lista.length, 1);
+    assert.equal(lista[0].usuario, 'ana');
+    assert.equal(lista[0].senhaHash, undefined);
+    assert.equal(lista[0].email, 'ana@teste.com');
+
+    const contagem = await (await fetch(`${s.baseUrl}/api/solicitacoes/contagem`, {
+        headers: { authorization: `Bearer ${token}` },
+    })).json();
+    assert.equal(contagem.pendentes, 1);
+
+    const aprovacao = await decidir(s.baseUrl, token, lista[0].id, 'aprovar');
+    assert.equal(aprovacao.status, 201);
+    assert.equal(aprovacao.corpo.nome, 'Ana');
+    assert.ok(await logar(s.baseUrl, 'ana', '1234'));
+    assert.equal((await decidir(s.baseUrl, token, lista[0].id, 'aprovar')).status, 409);
+    assert.ok(emails.some((m) => m.assunto === 'Klok: seu cadastro foi aprovado'));
+});
+
+test('funcionário não acessa rotas de solicitação', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
+    const lista = await (await fetch(`${s.baseUrl}/api/solicitacoes`, {
+        headers: { authorization: `Bearer ${token}` },
+    })).json();
+    await decidir(s.baseUrl, token, lista[0].id, 'aprovar');
+
+    const tokenFuncionario = await logar(s.baseUrl, 'ana', '1234');
+    const resp = await fetch(`${s.baseUrl}/api/solicitacoes`, {
+        headers: { authorization: `Bearer ${tokenFuncionario}` },
+    });
+    assert.equal(resp.status, 403);
+});
+
+test('coordenador de outra empresa não vê nem decide pedido', async (t) => {
+    const s = await iniciarApp({ segundaEmpresa: true, enviarEmail: async () => {} });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+    const id = s.banco.buscarSolicitacaoPorUsuario('ana').id;
+
+    const tokenB = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA, 'OUTRA');
+    const listaB = await (await fetch(`${s.baseUrl}/api/solicitacoes`, {
+        headers: { authorization: `Bearer ${tokenB}` },
+    })).json();
+    assert.equal(listaB.length, 0);
+    assert.equal((await decidir(s.baseUrl, tokenB, id, 'aprovar')).status, 404);
+    assert.equal((await decidir(s.baseUrl, tokenB, id, 'recusar')).status, 404);
+});
+
+test('status inválido e recusa mantêm histórico', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
+    const id = s.banco.buscarSolicitacaoPorUsuario('ana').id;
+
+    const invalido = await fetch(`${s.baseUrl}/api/solicitacoes?status=outro`, {
+        headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(invalido.status, 400);
+
+    assert.equal((await decidir(s.baseUrl, token, id, 'recusar')).status, 200);
+    assert.equal((await decidir(s.baseUrl, token, id, 'recusar')).status, 409);
+    assert.equal((await pedidoLogin(s.baseUrl, { empresa: EMPRESA, usuario: 'ana', senha: '1234' })).status, 403);
+    const recusados = await (await fetch(`${s.baseUrl}/api/solicitacoes?status=recusado`, {
+        headers: { authorization: `Bearer ${token}` },
+    })).json();
+    assert.equal(recusados.length, 1);
+});
+
+test('falha no email de aprovação não derruba a aprovação', async (t) => {
+    const s = await iniciarApp({
+        enviarEmail: async () => {
+            throw new Error('SMTP fora');
+        },
+    });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
+    const id = s.banco.buscarSolicitacaoPorUsuario('ana').id;
+
+    const aprovacao = await decidir(s.baseUrl, token, id, 'aprovar');
+    assert.equal(aprovacao.status, 201);
+    assert.ok(await logar(s.baseUrl, 'ana', '1234'));
 });
