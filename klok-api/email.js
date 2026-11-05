@@ -19,14 +19,17 @@ export function criarEnviarEmail() {
     const comSmtp = !!(host && user && pass);
 
     if (!comSmtp) {
-        return async function enviarEmailSemSmtp({ para, url, urlApp }) {
+        return async function enviarEmailSemSmtp({ para, assunto, texto }) {
             if (process.env.NODE_ENV === 'production') {
                 throw new Error('SMTP não configurado em produção.');
             }
-            console.log('[klok] SMTP não configurado, simule a recuperação em desenvolvimento:');
+            if (!destinatarioValido(para)) {
+                throw new Error('Destinatário de email inválido.');
+            }
+            console.log('[klok] email simulado');
             console.log(`[klok]   Para: ${para}`);
-            console.log(`[klok]   Página: ${url}`);
-            console.log(`[klok]   App: ${urlApp}`);
+            console.log(`[klok]   Assunto: ${assunto}`);
+            console.log(`[klok]   Texto: ${texto}`);
         };
     }
 
@@ -37,22 +40,10 @@ export function criarEnviarEmail() {
         auth: { user, pass },
     });
 
-    return async function enviarEmail({ para, url }) {
+    return async function enviarEmail({ para, assunto, texto }) {
         if (!destinatarioValido(para)) {
             throw new Error('Destinatário de email inválido.');
         }
-        await transportador.sendMail({
-            from: remetente,
-            to: para,
-            subject: 'Klok: Redefinição de senha',
-            text: [
-                'Recebemos um pedido para redefinir sua senha no app Klok.',
-                'Clique no link abaixo para confirmar que é você e definir uma nova senha:',
-                '',
-                url,
-                '',
-                'Este link é válido por 30 minutos. Se você não pediu, ignore este email.',
-            ].join('\n'),
-        });
+        await transportador.sendMail({ from: remetente, to: para, subject: assunto, text: texto });
     };
 }

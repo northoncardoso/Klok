@@ -8,6 +8,7 @@ import {
     texto,
 } from '../validacao.js';
 import { MINIMO_SENHA } from './coordenadores.js';
+import { avisarCoordenadores } from '../avisos.js';
 
 const TOKEN_HEX = /^[0-9a-f]{64}$/;
 
@@ -29,9 +30,47 @@ function escaparHtml(valor) {
 }
 
 export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviarEmail }) {
-    function registrar(req, res) {
-        res.status(403).json({
-            erro: 'O cadastro está temporariamente fechado. Peça ao coordenador da sua empresa para criar seu acesso.',
+    async function registrar(req, res) {
+        const banco = req.banco;
+        const usuario = texto(req.body?.usuario, 'usuario');
+        const senhaLimpa = senhaDe(req.body?.senha);
+        const nome = texto(req.body?.nome, 'nome') || usuario;
+        const email = emailNormalizado(req.body?.email);
+
+        if (!usuario || !semCaractereDeControle(usuario)) {
+            return res.status(400).json({ erro: 'Informe um nome de usuário válido' });
+        }
+        if (senhaLimpa.length < MINIMO_SENHA) {
+            return res.status(400).json({ erro: `A senha deve ter ao menos ${MINIMO_SENHA} caracteres` });
+        }
+        if (!emailValido(email)) {
+            return res.status(400).json({ erro: 'Informe um email válido' });
+        }
+        if (banco.buscarUsuarioPorLogin(usuario) || banco.buscarSolicitacaoPorUsuario(usuario)) {
+            return res.status(409).json({ erro: 'Este nome de usuário já está em uso' });
+        }
+
+        const criada = banco.criarSolicitacao({
+            usuario,
+            senhaHash: banco.criarHashSenha(senhaLimpa),
+            nome,
+            email,
+            numero: '',
+            googleId: null,
+        });
+        if (criada.erro) return res.status(criada.status).json({ erro: criada.erro });
+
+        await avisarCoordenadores({
+            banco,
+            enviarEmail,
+            empresa: req.empresa,
+            nome,
+            identificacao: usuario,
+            email,
+        });
+        res.status(201).json({
+            sucesso: true,
+            mensagem: 'Seu cadastro foi enviado. Aguarde a aprovação de um coordenador da sua empresa.',
         });
     }
 
@@ -43,11 +82,21 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
             return res.status(400).json({ erro: 'Informe usuário e senha' });
         }
         const encontrado = banco.validarSenha(usuarioLimpo, senhaLimpa);
-        if (!encontrado) {
-            return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
+        if (encontrado) {
+            const token = await gerarTokenEmpresa(encontrado, req.empresa);
+            return res.json({ token, tipo: encontrado.tipo, nome: encontrado.usuario, id: encontrado.id });
         }
-        const token = await gerarTokenEmpresa(encontrado, req.empresa);
-        res.json({ token, tipo: encontrado.tipo, nome: encontrado.usuario, id: encontrado.id });
+
+        const pedido = banco.validarSenhaSolicitacao(usuarioLimpo, senhaLimpa);
+        if (pedido) {
+            const mensagem =
+                pedido.status === 'pendente'
+                    ? 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.'
+                    : 'Seu pedido de cadastro foi recusado. Fale com um coordenador da sua empresa.';
+            return res.status(403).json({ erro: mensagem });
+        }
+
+        return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
     }
 
     async function loginGoogle(req, res) {
@@ -61,14 +110,52 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
             });
             const payload = ticket.getPayload();
             const sub = texto(payload?.sub, 'usuario');
+            const nomeGoogle = texto(payload?.name, 'nome');
+            const email = emailNormalizado(payload?.email);
             if (!sub) return res.status(401).json({ erro: 'Falha na autenticação com Google' });
-            const usuario = banco.criarOuBuscarUsuarioGoogle(
-                sub,
-                texto(payload?.name, 'nome'),
-                emailNormalizado(payload?.email)
-            );
-            const token = await gerarTokenEmpresa(usuario, req.empresa);
-            res.json({ token, tipo: usuario.tipo, nome: texto(payload?.name, 'nome'), id: usuario.id });
+            if (!emailValido(email)) {
+                return res.status(400).json({ erro: 'Sua conta Google não devolveu um email válido' });
+            }
+
+            const usuario = banco.buscarUsuarioPorGoogleId(sub);
+            if (usuario) {
+                const token = await gerarTokenEmpresa(usuario, req.empresa);
+                return res.json({ token, tipo: usuario.tipo, nome: nomeGoogle, id: usuario.id });
+            }
+
+            const pedido = banco.buscarSolicitacaoPorGoogleId(sub);
+            if (pedido?.status === 'pendente') {
+                return res.status(403).json({
+                    erro: 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.',
+                });
+            }
+            if (pedido?.status === 'recusado') {
+                return res.status(403).json({
+                    erro: 'Seu pedido de cadastro foi recusado. Fale com um coordenador da sua empresa.',
+                });
+            }
+
+            const criada = banco.criarSolicitacao({
+                usuario: null,
+                senhaHash: null,
+                nome: nomeGoogle,
+                email,
+                numero: '',
+                googleId: sub,
+            });
+            if (criada.erro) return res.status(criada.status).json({ erro: criada.erro });
+
+            await avisarCoordenadores({
+                banco,
+                enviarEmail,
+                empresa: req.empresa,
+                nome: nomeGoogle,
+                identificacao: `conta Google ${email}`,
+                email,
+            });
+            return res.status(403).json({
+                erro: 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.',
+            });
         } catch {
             res.status(401).json({ erro: 'Falha na autenticação com Google' });
         }
@@ -161,7 +248,17 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         const base = (process.env.URL_BASE || 'http://localhost:3000').replace(/\/+$/, '');
         const url = `${base}/redefinir-senha/${req.empresa}/${token}`;
         const urlApp = `klok://redefinir-senha?empresa=${req.empresa}&token=${token}`;
-        await enviarEmail({ para: email, url, urlApp });
+        const assunto = 'Klok: Redefinição de senha';
+        const corpo = [
+            'Recebemos um pedido para redefinir sua senha no app Klok.',
+            'Abra o link abaixo para confirmar que é você e definir uma nova senha:',
+            '',
+            url,
+            urlApp,
+            '',
+            'Este link é válido por 30 minutos. Se você não pediu, ignore este email.',
+        ].join('\n');
+        await enviarEmail({ para: email, assunto, texto: corpo });
 
         if (ehProducao() || smtpCompleto()) {
             return res.json(MENSAGEM_GENERICA);

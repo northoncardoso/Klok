@@ -250,7 +250,7 @@ test('email com CRLF é recusado na recuperação e nenhum email é enviado', as
     assert.deepEqual(enviados, [], 'nenhum email pode ter sido enviado');
 });
 
-test('cadastro fechado recusa qualquer payload e não cria ninguém', async (t) => {
+test('cadastro recusa email malicioso e não cria usuário', async (t) => {
     const s = await iniciarApp({ comCoordenador: false, limiteAuth: 1000 });
     t.after(() => s.fechar());
 
@@ -258,11 +258,12 @@ test('cadastro fechado recusa qualquer payload e não cria ninguém', async (t) 
         const r = await pedido(s.baseUrl, '/api/auth/registrar', {
             corpo: JSON.stringify({ empresa: EMPRESA, ...COORDENADOR, email: malicioso }),
         });
-        assert.equal(r.status, 403, `esperava 403 no cadastro fechado para ${nome}`);
+        assert.equal(r.status, 400, `esperava 400 no cadastro para ${nome}`);
     }
 
     assert.equal(s.banco.existeCoordenador(), false, 'nenhum coordenador pode ter sido criado');
     assert.equal(s.banco.buscarUsuarioPorLogin('coordenador'), undefined);
+    assert.equal(s.banco.contarSolicitacoesPendentes(), 0, 'nenhum pedido pode ter sido criado');
 });
 
 test('destinatarioValido rejeita CRLF, tipos exóticos e email sem arroba', () => {

@@ -26,7 +26,7 @@ Plano de implementação em `docs/superpowers/plans/`.
 
 ## Como rodar e testar
 
-- Backend: `cd klok-api` e `npm test`. Hoje são 99 testes. Exige Node 22.5 ou mais
+- Backend: `cd klok-api` e `npm test`. Hoje são 123 testes. Exige Node 22.5 ou mais
   novo por causa do `node:sqlite`. Se o Node do sistema for antigo, use
   `mise use node@22` antes.
 - App: `npm run typecheck`. Rodar com `npx expo start` ou `npx expo run:android`.
@@ -58,9 +58,11 @@ Ordem aprovada, cada bloco com seu design e seu plano.
   `docs/superpowers/plans/2026-11-02-empresas-parte-1.md` e o PR #34 aberto com
   a CI verde. O login por empresa entrou no app e o autocadastro ficou fechado (403).
 - D. Multiempresa parte 2: pedido de funcionário com aprovação, aviso no app e
-  email (#19, reaberta como #31). Design original em
-  `docs/superpowers/specs/2026-10-13-pedido-funcionario-aprovacao-design.md`,
-  adaptado ao banco por empresa.
+  email (#31, que substitui a #19). Implementada na branch `feat/empresas-parte-2`,
+  com o plano em
+  `docs/superpowers/plans/2026-11-03-empresas-parte-2-autocadastro.md`. O
+  autocadastro local e o login Google viram pedido pendente, o coordenador decide
+  na tela de Solicitações e o menu mostra o contador. PR #36.
 - E. Multiempresa parte 3: suporte e resumo no painel (#32), com funcionários,
   coordenadores, pontos, pedidos e backup.
 - F. Screenshots e README (#8).

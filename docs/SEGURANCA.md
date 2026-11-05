@@ -49,7 +49,7 @@ O isolamento entre empresas tem suíte própria em `test/isolamento.test.js`.
 | 7 | Token de redefinição viaja na URL | médio | parcialmente |
 | 8 | API sem TLS e sem headers de segurança | médio | parcialmente |
 | 9 | Política de senha ausente | médio | parcialmente |
-| 10 | Cadastro de funcionário aberto, sem aprovação | médio | fechado na parte 1, aprovação na parte 2 |
+| 10 | Cadastro de funcionário aberto, sem aprovação | médio | corrigido com pedido pendente e aprovação |
 | 11 | Página de redefinição sem limite de requisições | baixo | corrigido, com teste |
 | 12 | Unicidade do coordenador só garantida na aplicação | baixo | corrigido, com teste |
 
@@ -260,18 +260,21 @@ são definidas no próprio app.
 Falta: exigir tamanho maior e alguma complexidade, e travar tentativas de senha
 fraca. Quatro caracteres é o piso, não uma política.
 
-### 10. Cadastro aberto (médio, fechado nesta entrega)
+### 10. Cadastro aberto (médio, corrigido)
 
 `POST /api/auth/registrar` era público e sem aprovação: qualquer pessoa criava conta
 e já batia ponto. Login com Google também criava usuário para qualquer conta, sem
 checar `email_verified` nem domínio.
 
-Na parte 1 do multiempresa a rota passou a responder **403**: o cadastro está
-fechado e o funcionário é criado pelo coordenador. A parte 2 transforma o
-autocadastro em pedido pendente, com o código da empresa e a aprovação de um
-coordenador daquela empresa. Enquanto isso, a rota não cria mais ninguém e o teste
-`cadastro fechado recusa qualquer payload e não cria ninguém` guarda o
-comportamento.
+Na parte 1 do multiempresa a rota passou a responder **403**. A parte 2 abriu o
+autocadastro como pedido pendente: o candidato envia empresa, usuário, nome,
+email e senha, o pedido fica no banco daquela empresa e o login responde 403 até
+um coordenador aprovar. A senha só entra como `senhaHash`, nunca sai do `db.js`,
+e a listagem não devolve o hash. Aprovar cria o funcionário e libera o login;
+recusar mantém o pedido no histórico e bloqueia o acesso. O login Google segue o
+mesmo fluxo, com um único pedido por `googleId`. O teste
+`cadastro recusa email malicioso e não cria usuário` e os testes de
+`solicitacoes.test.js` guardam o comportamento.
 
 ### 11. Página de redefinição sem limite (baixo, corrigido)
 

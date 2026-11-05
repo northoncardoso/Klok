@@ -87,18 +87,25 @@ test('email e número do coordenador reaparecem no próprio perfil', async (t) =
     assert.equal(eu.numero, COORDENADOR.numero);
 });
 
-test('o autocadastro está fechado e não cria usuário', async (t) => {
-    const s = await iniciarApp();
+test('o autocadastro cria pedido e não cria usuário direto', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
     t.after(() => s.fechar());
 
     const resp = await fetch(`${s.baseUrl}/api/auth/registrar`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ empresa: EMPRESA, usuario: 'ana', senha: '123456' }),
+        body: JSON.stringify({
+            empresa: EMPRESA,
+            usuario: 'ana',
+            senha: '123456',
+            nome: 'Ana',
+            email: 'ana@teste.com',
+        }),
     });
-    assert.equal(resp.status, 403);
-    assert.match((await resp.json()).erro, /temporariamente fechado/i);
+    assert.equal(resp.status, 201);
+    assert.equal((await resp.json()).token, undefined);
     assert.equal(s.banco.buscarUsuarioPorLogin('ana'), undefined);
+    assert.equal(s.banco.contarSolicitacoesPendentes(), 1);
 });
 
 test('login local devolve token de empresa', async (t) => {
@@ -176,13 +183,13 @@ test('GET /api/auth/eu com token retorna dados do usuário', async (t) => {
     assert.equal(corpo.tipo, 'funcionario');
 });
 
-test('login com Google cria usuário e reutiliza em login seguinte', async (t) => {
+test('login Google sem usuário ativo vira pedido pendente', async (t) => {
     const clienteGoogle = {
         verifyIdToken: async () => ({
             getPayload: () => ({ sub: 'g123', name: 'Ana Google', email: 'ana@gmail.com' }),
         }),
     };
-    const s = await iniciarApp({ clienteGoogle });
+    const s = await iniciarApp({ clienteGoogle, enviarEmail: async () => {} });
     t.after(() => s.fechar());
 
     const primeira = await fetch(`${s.baseUrl}/api/auth/google`, {
@@ -190,20 +197,18 @@ test('login com Google cria usuário e reutiliza em login seguinte', async (t) =
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-fake' }),
     });
-    assert.equal(primeira.status, 200);
+    assert.equal(primeira.status, 403);
     const corpo1 = await primeira.json();
-    assert.ok(corpo1.token);
-    assert.equal(corpo1.tipo, 'funcionario');
-    assert.equal(corpo1.nome, 'Ana Google');
+    assert.equal(corpo1.token, undefined);
+    assert.match(corpo1.erro, /aguardando aprovação/);
 
     const segunda = await fetch(`${s.baseUrl}/api/auth/google`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-fake' }),
     });
-    assert.equal(segunda.status, 200);
-    const corpo2 = await segunda.json();
-    assert.equal(corpo2.id, corpo1.id, 'mesmo googleId não deve duplicar usuário');
+    assert.equal(segunda.status, 403);
+    assert.equal(s.banco.contarSolicitacoesPendentes(), 1, 'mesmo googleId não deve duplicar pedido');
 });
 
 test('login Google sem idToken retorna 400', async (t) => {

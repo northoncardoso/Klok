@@ -7,14 +7,10 @@ function hashDoToken(token) {
     return createHash('sha256').update(token).digest('hex');
 }
 
-function tokenDoLink(urlApp) {
-    return new URL(urlApp).searchParams.get('token');
-}
-
 test('recuperação envia link e redefinir senha funciona', async (t) => {
     const emailsEnviados = [];
     const s = await iniciarApp({
-        enviarEmail: async ({ para, url, urlApp }) => emailsEnviados.push({ para, url, urlApp }),
+        enviarEmail: async ({ para, assunto, texto }) => emailsEnviados.push({ para, assunto, texto }),
     });
     t.after(() => s.fechar());
 
@@ -34,15 +30,11 @@ test('recuperação envia link e redefinir senha funciona', async (t) => {
     assert.equal(resp.status, 200);
     assert.equal(emailsEnviados.length, 1);
     assert.equal(emailsEnviados[0].para, 'lia@mail.com');
-    assert.ok(
-        emailsEnviados[0].url.startsWith('http://localhost:3000/redefinir-senha/TESTE/'),
-        'email leva para a página de confirmação da empresa'
-    );
-    assert.ok(
-        emailsEnviados[0].urlApp.startsWith('klok://redefinir-senha?empresa=TESTE&token='),
-        'link do app usa o esquema klok e leva a empresa'
-    );
-    const tokenReset = tokenDoLink(emailsEnviados[0].urlApp);
+    assert.equal(emailsEnviados[0].assunto, 'Klok: Redefinição de senha');
+    assert.match(emailsEnviados[0].texto, /http:\/\/localhost:3000\/redefinir-senha\/TESTE\/[0-9a-f]{64}/);
+    const tokenReset = emailsEnviados[0].texto.match(
+        /klok:\/\/redefinir-senha\?empresa=TESTE&token=([0-9a-f]{64})/
+    )[1];
 
     const pagina = await fetch(`${s.baseUrl}/redefinir-senha/${EMPRESA}/${tokenReset}`);
     assert.equal(pagina.status, 200);
@@ -75,7 +67,7 @@ test('recuperação envia link e redefinir senha funciona', async (t) => {
 test('email desconhecido não revela a existência e não envia link', async (t) => {
     const emailsEnviados = [];
     const s = await iniciarApp({
-        enviarEmail: async ({ para, url }) => emailsEnviados.push({ para, url }),
+        enviarEmail: async ({ para }) => emailsEnviados.push({ para }),
     });
     t.after(() => s.fechar());
 
@@ -94,7 +86,7 @@ test('email desconhecido não revela a existência e não envia link', async (t)
 test('link só pode ser usado uma vez', async (t) => {
     const emailsEnviados = [];
     const s = await iniciarApp({
-        enviarEmail: async ({ urlApp }) => emailsEnviados.push(urlApp),
+        enviarEmail: async ({ texto }) => emailsEnviados.push(texto),
     });
     t.after(() => s.fechar());
 
@@ -110,7 +102,7 @@ test('link só pode ser usado uma vez', async (t) => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ empresa: EMPRESA, email: 'mila@mail.com' }),
     });
-    const tokenReset = tokenDoLink(emailsEnviados[0]);
+    const tokenReset = emailsEnviados[0].match(/klok:\/\/redefinir-senha\?empresa=TESTE&token=([0-9a-f]{64})/)[1];
 
     const primeira = await fetch(`${s.baseUrl}/api/auth/redefinir-senha`, {
         method: 'POST',

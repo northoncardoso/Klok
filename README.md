@@ -7,12 +7,14 @@ Aplicativo React Native / Expo de gestão de funcionários com **batida de ponto
 - O **admin da KLOK** cria a empresa e o primeiro coordenador dela pelo painel web em `/admin`.
 - Perfil **coordenador** controla os funcionários (cadastra, edita, exclui e vê os
   pontos de todos) e pode criar outros coordenadores na tela de Coordenadores.
+- **Autocadastro vira pedido pendente**: o candidato informa empresa, nome,
+  usuário, email e senha, e o coordenador aprova ou recusa na tela de
+  Solicitações, com contador no menu e aviso por email.
 - Funcionário **bate o ponto** e vê o próprio histórico.
 - Todo dado fica em um **backend Node.js/Express** com SQLite (nativo do Node, sem dependência extra).
 
-> Nesta entrega o **autocadastro de funcionário está fechado**: é o coordenador
-> quem cria o acesso. O pedido com aprovação e aviso ao coordenador entra na
-> parte 2, junto com o código da empresa.
+> O autocadastro **não cria acesso direto**: ele abre um pedido pendente no banco
+> da empresa, que só vira funcionário depois da aprovação de um coordenador.
 
 > Removido o Keycloak. O único provedor de login social é o **Google OAuth2**.
 > O slug do EAS segue `myreactjobs` por ser o identificador do projeto EAS que
@@ -143,7 +145,7 @@ não abre rota de admin, e o de admin (`aud: klok-admin`) não abre rota de empr
 | POST | `/api/admin/empresas/:codigo/coordenador` | admin | Cria o primeiro coordenador |
 | POST | `/api/auth/login` | público | Login local na empresa → JWT |
 | POST | `/api/auth/google` | público | Login Google na empresa → JWT |
-| POST | `/api/auth/registrar` | público | Fechado nesta entrega, responde 403 |
+| POST | `/api/auth/registrar` | público | Abre pedido de cadastro pendente |
 | GET | `/api/auth/eu` | logado | Dados do usuário |
 | PUT | `/api/auth/eu` | logado | Atualiza os próprios dados |
 | PUT | `/api/auth/senha` | logado | Troca a senha |
@@ -158,6 +160,10 @@ não abre rota de admin, e o de admin (`aud: klok-admin`) não abre rota de empr
 | POST | `/api/pontos` | logado | Bate o ponto |
 | GET | `/api/pontos/meus` | logado | Meu histórico |
 | GET | `/api/pontos` | coordenador | Pontos de todos |
+| GET | `/api/solicitacoes?status=` | coordenador | Lista pedidos, padrão pendente |
+| GET | `/api/solicitacoes/contagem` | coordenador | Conta pedidos pendentes |
+| POST | `/api/solicitacoes/:id/aprovar` | coordenador | Aprova e cria funcionário |
+| POST | `/api/solicitacoes/:id/recusar` | coordenador | Recusa e mantém histórico |
 
 Autenticação: header `Authorization: Bearer <token>`.
 
@@ -213,5 +219,7 @@ antes de sair do app. Empresa desativada não deixa ninguém entrar, mesmo que o
 banco dela já esteja aberto em cache.
 
 O funcionário é criado pelo coordenador na tela de Funcionários. O autocadastro
-está fechado nesta entrega. Na parte 2 ele passa a ser um pedido pendente, com o
-código da empresa e a aprovação de um coordenador.
+abre um pedido pendente no banco da empresa: o candidato informa email para
+receber o aviso, e o coordenador vê a lista com contador no menu e decide entre
+aprovar ou recusar na tela de Solicitações. Aprovar cria o funcionário e libera o
+login; recusar bloqueia o acesso e mantém o pedido no histórico.
