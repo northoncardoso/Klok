@@ -13,10 +13,13 @@ export function textoNovoPedido({ empresa, nome, identificacao, email }) {
 }
 
 export function textoAprovacao({ empresa, usuario }) {
+    const entrada = usuario
+        ? `Entre no app Klok com o usuário ${usuario} e a senha que você cadastrou.`
+        : 'Entre no app Klok com o botão Entrar com Google.';
     return [
         `Seu cadastro na empresa ${empresa} foi aprovado.`,
         '',
-        `Entre no app Klok com o usuário ${usuario} e a senha que você cadastrou.`,
+        entrada,
     ].join('\n');
 }
 

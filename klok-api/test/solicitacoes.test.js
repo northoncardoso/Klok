@@ -243,3 +243,34 @@ test('falha no email de aprovação não derruba a aprovação', async (t) => {
     assert.equal(aprovacao.status, 201);
     assert.ok(await logar(s.baseUrl, 'ana', '1234'));
 });
+
+test('aprovação de conta Google avisa e libera o login Google', async (t) => {
+    const emails = [];
+    const s = await iniciarApp({
+        clienteGoogle: googleFake({ sub: 'g-3', name: 'Gabi Google', email: 'gabi@gmail.com' }),
+        enviarEmail: async (m) => emails.push(m),
+    });
+    t.after(() => s.fechar());
+
+    await fetch(`${s.baseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
+    });
+    const token = await logar(s.baseUrl, COORDENADOR.usuario, COORDENADOR_SENHA);
+    const lista = await (await fetch(`${s.baseUrl}/api/solicitacoes`, {
+        headers: { authorization: `Bearer ${token}` },
+    })).json();
+    assert.equal((await decidir(s.baseUrl, token, lista[0].id, 'aprovar')).status, 201);
+
+    const aprovacao = emails.find((m) => m.assunto === 'Klok: seu cadastro foi aprovado');
+    assert.match(aprovacao.texto, /Entrar com Google/);
+
+    const login = await fetch(`${s.baseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
+    });
+    assert.equal(login.status, 200);
+    assert.ok((await login.json()).token);
+});

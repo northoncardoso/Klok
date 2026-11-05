@@ -28,7 +28,7 @@ export function criarControladoresSolicitacoes({ enviarEmail }) {
             await avisarAprovacao({
                 enviarEmail,
                 empresa: req.empresa,
-                usuario: pedido.usuario ?? 'sua conta Google',
+                usuario: pedido.usuario,
                 email: pedido.email,
             });
         }
