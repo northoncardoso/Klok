@@ -265,22 +265,8 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         db.prepare('UPDATE recuperacao_senha SET usado = 1 WHERE id = ?').run(registroId);
     }
 
-    function criarOuBuscarUsuarioGoogle(googleId, nome, email) {
-        const existe = db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(paraTexto(googleId));
-        if (existe) return existe;
-
-        const funcionarioId = criarFuncionario(nome, '', email ?? '');
-        db.prepare(
-            'INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, googleId, empresa) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(
-            `google_${paraTexto(googleId)}`,
-            null,
-            'funcionario',
-            funcionarioId,
-            paraTexto(googleId),
-            empresa
-        );
-        return buscarUsuarioPorGoogleId(googleId);
+    function buscarUsuarioPorGoogleId(googleId) {
+        return db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(paraTexto(googleId));
     }
 
     function buscarUsuarioPorGoogleId(googleId) {
@@ -455,7 +441,6 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         criarRecuperacao,
         buscarRecuperacaoPorToken,
         marcarRecuperacaoUsada,
-        criarOuBuscarUsuarioGoogle,
         buscarUsuarioPorGoogleId,
         buscarUsuarioPorId,
         validarSenha,

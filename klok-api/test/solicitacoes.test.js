@@ -84,3 +84,51 @@ test('login de pedido recusado dá 403 e nome continua reservado', async (t) => 
     assert.match(r.corpo.erro, /foi recusado/);
     assert.equal((await cadastrar(s.baseUrl)).status, 409);
 });
+
+function googleFake(payload) {
+    return {
+        verifyIdToken: async () => ({ getPayload: () => payload }),
+    };
+}
+
+test('login Google cria um pedido, não duplica e avisa o coordenador', async (t) => {
+    const emails = [];
+    const s = await iniciarApp({
+        clienteGoogle: googleFake({ sub: 'g-1', name: 'Gabi', email: 'gabi@teste.com' }),
+        enviarEmail: async (m) => emails.push(m),
+    });
+    t.after(() => s.fechar());
+
+    const resp = await fetch(`${s.baseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
+    });
+    assert.equal(resp.status, 403);
+    assert.equal(s.banco.contarSolicitacoesPendentes(), 1);
+    assert.equal(s.banco.buscarUsuarioPorGoogleId('g-1'), undefined);
+
+    const repetido = await fetch(`${s.baseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
+    });
+    assert.equal(repetido.status, 403);
+    assert.equal(s.banco.contarSolicitacoesPendentes(), 1);
+    assert.equal(emails.length, 1);
+});
+
+test('login Google sem email não cria pedido', async (t) => {
+    const s = await iniciarApp({
+        clienteGoogle: googleFake({ sub: 'g-2', name: 'Sem Email' }),
+        enviarEmail: async () => {},
+    });
+    t.after(() => s.fechar());
+    const resp = await fetch(`${s.baseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
+    });
+    assert.equal(resp.status, 400);
+    assert.equal(s.banco.contarSolicitacoesPendentes(), 0);
+});

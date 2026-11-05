@@ -110,14 +110,52 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
             });
             const payload = ticket.getPayload();
             const sub = texto(payload?.sub, 'usuario');
+            const nomeGoogle = texto(payload?.name, 'nome');
+            const email = emailNormalizado(payload?.email);
             if (!sub) return res.status(401).json({ erro: 'Falha na autenticação com Google' });
-            const usuario = banco.criarOuBuscarUsuarioGoogle(
-                sub,
-                texto(payload?.name, 'nome'),
-                emailNormalizado(payload?.email)
-            );
-            const token = await gerarTokenEmpresa(usuario, req.empresa);
-            res.json({ token, tipo: usuario.tipo, nome: texto(payload?.name, 'nome'), id: usuario.id });
+            if (!emailValido(email)) {
+                return res.status(400).json({ erro: 'Sua conta Google não devolveu um email válido' });
+            }
+
+            const usuario = banco.buscarUsuarioPorGoogleId(sub);
+            if (usuario) {
+                const token = await gerarTokenEmpresa(usuario, req.empresa);
+                return res.json({ token, tipo: usuario.tipo, nome: nomeGoogle, id: usuario.id });
+            }
+
+            const pedido = banco.buscarSolicitacaoPorGoogleId(sub);
+            if (pedido?.status === 'pendente') {
+                return res.status(403).json({
+                    erro: 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.',
+                });
+            }
+            if (pedido?.status === 'recusado') {
+                return res.status(403).json({
+                    erro: 'Seu pedido de cadastro foi recusado. Fale com um coordenador da sua empresa.',
+                });
+            }
+
+            const criada = banco.criarSolicitacao({
+                usuario: null,
+                senhaHash: null,
+                nome: nomeGoogle,
+                email,
+                numero: '',
+                googleId: sub,
+            });
+            if (criada.erro) return res.status(criada.status).json({ erro: criada.erro });
+
+            await avisarCoordenadores({
+                banco,
+                enviarEmail,
+                empresa: req.empresa,
+                nome: nomeGoogle,
+                identificacao: `conta Google ${email}`,
+                email,
+            });
+            return res.status(403).json({
+                erro: 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.',
+            });
         } catch {
             res.status(401).json({ erro: 'Falha na autenticação com Google' });
         }
