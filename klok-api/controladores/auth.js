@@ -82,11 +82,21 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
             return res.status(400).json({ erro: 'Informe usuário e senha' });
         }
         const encontrado = banco.validarSenha(usuarioLimpo, senhaLimpa);
-        if (!encontrado) {
-            return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
+        if (encontrado) {
+            const token = await gerarTokenEmpresa(encontrado, req.empresa);
+            return res.json({ token, tipo: encontrado.tipo, nome: encontrado.usuario, id: encontrado.id });
         }
-        const token = await gerarTokenEmpresa(encontrado, req.empresa);
-        res.json({ token, tipo: encontrado.tipo, nome: encontrado.usuario, id: encontrado.id });
+
+        const pedido = banco.validarSenhaSolicitacao(usuarioLimpo, senhaLimpa);
+        if (pedido) {
+            const mensagem =
+                pedido.status === 'pendente'
+                    ? 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.'
+                    : 'Seu pedido de cadastro foi recusado. Fale com um coordenador da sua empresa.';
+            return res.status(403).json({ erro: mensagem });
+        }
+
+        return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
     }
 
     async function loginGoogle(req, res) {

@@ -32,8 +32,8 @@ test('cadastro cria pedido pendente sem usuário e sem token', async (t) => {
     assert.equal(emails.length, 1);
     assert.equal(emails[0].para, COORDENADOR.email);
     assert.match(emails[0].assunto, /novo pedido de cadastro em TESTE/);
-    // TODO tarefa 4: o login de pedido pendente passa a responder 403 e esta asserção vira 403.
-    assert.equal((await pedidoLogin(s.baseUrl, { empresa: EMPRESA, usuario: 'ana', senha: '1234' })).status, 401);
+    const login = await pedidoLogin(s.baseUrl, { empresa: EMPRESA, usuario: 'ana', senha: '1234' });
+    assert.equal(login.status, 403);
 });
 
 test('cadastro exige email válido e nome de usuário livre', async (t) => {
@@ -57,4 +57,30 @@ test('falha de email não derruba o cadastro', async (t) => {
     });
     t.after(() => s.fechar());
     assert.equal((await cadastrar(s.baseUrl)).status, 201);
+});
+
+test('login de pedido pendente só revela 403 com a senha certa', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+
+    const certa = await pedidoLogin(s.baseUrl, { empresa: EMPRESA, usuario: 'ana', senha: '1234' });
+    assert.equal(certa.status, 403);
+    assert.match(certa.corpo.erro, /aguardando aprovação/);
+
+    const errada = await pedidoLogin(s.baseUrl, { empresa: EMPRESA, usuario: 'ana', senha: 'errada' });
+    assert.equal(errada.status, 401);
+    assert.equal(errada.corpo.erro, 'Usuário ou senha incorretos');
+});
+
+test('login de pedido recusado dá 403 e nome continua reservado', async (t) => {
+    const s = await iniciarApp({ enviarEmail: async () => {} });
+    t.after(() => s.fechar());
+    await cadastrar(s.baseUrl);
+    s.banco.recusarSolicitacao(s.banco.buscarSolicitacaoPorUsuario('ana').id);
+
+    const r = await pedidoLogin(s.baseUrl, { empresa: EMPRESA, usuario: 'ana', senha: '1234' });
+    assert.equal(r.status, 403);
+    assert.match(r.corpo.erro, /foi recusado/);
+    assert.equal((await cadastrar(s.baseUrl)).status, 409);
 });
