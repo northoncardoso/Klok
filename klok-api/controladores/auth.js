@@ -88,12 +88,15 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         }
 
         const pedido = banco.validarSenhaSolicitacao(usuarioLimpo, senhaLimpa);
-        if (pedido) {
-            const mensagem =
-                pedido.status === 'pendente'
-                    ? 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.'
-                    : 'Seu pedido de cadastro foi recusado. Fale com um coordenador da sua empresa.';
-            return res.status(403).json({ erro: mensagem });
+        if (pedido?.status === 'pendente') {
+            return res.status(403).json({
+                erro: 'Seu cadastro está aguardando aprovação de um coordenador da sua empresa.',
+            });
+        }
+        if (pedido?.status === 'recusado') {
+            return res.status(403).json({
+                erro: 'Seu pedido de cadastro foi recusado. Fale com um coordenador da sua empresa.',
+            });
         }
 
         return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
@@ -132,6 +135,11 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
             if (pedido?.status === 'recusado') {
                 return res.status(403).json({
                     erro: 'Seu pedido de cadastro foi recusado. Fale com um coordenador da sua empresa.',
+                });
+            }
+            if (pedido) {
+                return res.status(403).json({
+                    erro: 'Seu pedido de cadastro já foi decidido. Fale com um coordenador da sua empresa.',
                 });
             }
 
