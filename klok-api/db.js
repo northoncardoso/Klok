@@ -269,10 +269,6 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(paraTexto(googleId));
     }
 
-    function buscarUsuarioPorGoogleId(googleId) {
-        return db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(paraTexto(googleId));
-    }
-
     function buscarUsuarioPorId(id) {
         return db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
     }
