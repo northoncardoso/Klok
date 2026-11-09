@@ -1,5 +1,6 @@
 import { validarNovoCoordenador } from '../controladores/coordenadores.js';
 import { codigoEmpresa, senha as senhaDe, texto } from '../validacao.js';
+import { criarConsultasAdmin } from './consultas.js';
 
 export function criarControladoresAdmin({ catalogo, gerenciador, gerarTokenAdmin }) {
     async function login(req, res) {
@@ -61,5 +62,12 @@ export function criarControladoresAdmin({ catalogo, gerenciador, gerarTokenAdmin
         });
     }
 
-    return { login, listarEmpresas, criarEmpresa, atualizarEmpresa, criarCoordenador };
+    return {
+        login,
+        listarEmpresas,
+        criarEmpresa,
+        atualizarEmpresa,
+        criarCoordenador,
+        ...criarConsultasAdmin({ gerenciador }),
+    };
 }

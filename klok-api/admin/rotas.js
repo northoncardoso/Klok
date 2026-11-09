@@ -15,6 +15,12 @@ export function criarRotaAdmin(deps) {
     rota.post('/empresas', autenticarAdmin, seguro(c.criarEmpresa));
     rota.patch('/empresas/:codigo', autenticarAdmin, seguro(c.atualizarEmpresa));
     rota.post('/empresas/:codigo/coordenador', autenticarAdmin, seguro(c.criarCoordenador));
+    rota.get('/empresas/:codigo/resumo', autenticarAdmin, seguro(c.resumo));
+    rota.get('/empresas/:codigo/coordenadores', autenticarAdmin, seguro(c.listarCoordenadores));
+    rota.get('/empresas/:codigo/funcionarios', autenticarAdmin, seguro(c.listarFuncionarios));
+    rota.get('/empresas/:codigo/pontos', autenticarAdmin, seguro(c.listarPontos));
+    rota.get('/empresas/:codigo/solicitacoes', autenticarAdmin, seguro(c.listarSolicitacoes));
+    rota.get('/empresas/:codigo/banco', autenticarAdmin, seguro(c.infoBanco));
 
     return rota;
 }
