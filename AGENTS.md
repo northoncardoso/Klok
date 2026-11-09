@@ -40,6 +40,14 @@ Plano de implementação em `docs/superpowers/plans/`.
 - Antes de usar qualquer biblioteca ou recurso, conferir se está atual e não foi
   descontinuado.
 
+## Definition of Done
+
+- Teste escrito antes da regra, suíte inteira verde (`cd klok-api && npm test`).
+- `npm run typecheck` limpo.
+- CI verde no PR antes do merge, nunca direto na main.
+- Design e plano em `docs/superpowers/` atualizados quando a decisão muda.
+- Issue fechada citando o PR.
+
 ## Pendências conhecidas (issues abertas)
 
 - #8: prints do app no README.
@@ -55,7 +63,7 @@ Ordem aprovada, cada bloco com seu design e seu plano.
 - B. Dependências e headers (#15). Feito no PR #22, issue fechada.
 - C. Multiempresa parte 1: catálogo, banco por empresa, admin e painel básico
   (#30). Implementada na branch `feat/empresas-parte-1`, com o plano em
-  `docs/superpowers/plans/2026-11-02-empresas-parte-1.md` e o PR #34 aberto com
+  `docs/superpowers/plans/2026-11-02-empresas-parte-1.md` e o PR #34 mergeado com
   a CI verde. O login por empresa entrou no app e o autocadastro ficou fechado (403).
 - D. Multiempresa parte 2: pedido de funcionário com aprovação, aviso no app e
   email (#31, que substitui a #19). Implementada na branch `feat/empresas-parte-2`,
