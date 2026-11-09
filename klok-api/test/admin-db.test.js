@@ -29,7 +29,7 @@ test('resumo conta só o banco da empresa', (t) => {
     assert.equal(r.coordenadores, 1);
     assert.equal(r.pontos, 2);
     assert.equal(r.solicitacoesPendentes, 1);
-    assert.ok(r.ultimoPonto);
+    assert.match(r.ultimoPonto, /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test('lista pontos com filtro, limite e página', (t) => {
@@ -45,6 +45,8 @@ test('lista pontos com filtro, limite e página', (t) => {
 
     const daAna = banco.listarPontosFiltrados({ funcionarioId: ana, limite: 10 });
     assert.equal(daAna.total, 5);
+    assert.equal(daAna.pontos.length, 5);
+    assert.ok(daAna.pontos.every((p) => p.funcionarioId === ana));
 
     assert.equal(banco.contarPontosFiltrados({ funcionarioId: bia }), 1);
 });
@@ -56,19 +58,42 @@ test('filtro de data usa o dia de Brasília, não UTC', (t) => {
     banco.db.prepare(
         'INSERT INTO pontos (funcionarioId, dataHora, tipo) VALUES (?, ?, ?)'
     ).run(ana, '2026-11-09T02:00:00.000Z', 'entrada');
+    // 15:00 UTC do dia 10 é meio dia do dia 10 em Brasília, fora do dia 8.
+    banco.db.prepare(
+        'INSERT INTO pontos (funcionarioId, dataHora, tipo) VALUES (?, ?, ?)'
+    ).run(ana, '2026-11-10T15:00:00.000Z', 'saida');
 
     assert.equal(banco.contarPontosFiltrados({ de: '2026-11-08', ate: '2026-11-08' }), 1);
     assert.equal(banco.contarPontosFiltrados({ de: '2026-11-09', ate: '2026-11-09' }), 0);
+
+    const dia8 = banco.listarPontosFiltrados({ de: '2026-11-08', ate: '2026-11-08', limite: 10 });
+    assert.equal(dia8.pontos.length, 1);
+    assert.equal(dia8.pontos[0].dataHora, '2026-11-09T02:00:00.000Z');
+
+    const dia9 = banco.listarPontosFiltrados({ de: '2026-11-09', ate: '2026-11-09', limite: 10 });
+    assert.equal(dia9.pontos.length, 0);
+
+    const dia10 = banco.listarPontosFiltrados({ de: '2026-11-10', ate: '2026-11-10', limite: 10 });
+    assert.equal(dia10.pontos.length, 1);
+    assert.equal(dia10.pontos[0].dataHora, '2026-11-10T15:00:00.000Z');
 });
 
 test('lista solicitações paginadas e busca usuário por funcionário', (t) => {
     const banco = preparar(t);
     const usuario = banco.criarUsuarioLocal('ana', 'senha-1234', 'Ana');
-    banco.criarSolicitacao({ usuario: 'bia', nome: 'Bia', email: 'bia@teste.com' });
-    banco.criarSolicitacao({ usuario: 'caio', nome: 'Caio', email: 'caio@teste.com' });
+    banco.criarSolicitacao({ usuario: 'bia', nome: 'Bia', email: 'bia@teste.com', senhaHash: 'hash-secreto' });
+    banco.criarSolicitacao({ usuario: 'caio', nome: 'Caio', email: 'caio@teste.com', senhaHash: 'hash-secreto' });
 
     const pagina = banco.listarSolicitacoesPaginado({ limite: 1, pagina: 2 });
     assert.equal(pagina.solicitacoes.length, 1);
     assert.equal(pagina.total, 2);
+    assert.equal(pagina.solicitacoes[0].senhaHash, undefined);
+
+    const todas = banco.listarSolicitacoesPaginado({ limite: 10 });
+    assert.equal(todas.solicitacoes.length, 2);
+    for (const solicitacao of todas.solicitacoes) {
+        assert.equal(solicitacao.senhaHash, undefined);
+    }
+
     assert.equal(banco.buscarUsuarioPorFuncionarioId(usuario.funcionarioId).usuario, 'ana');
 });

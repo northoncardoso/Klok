@@ -462,7 +462,7 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
             `SELECT p.*, f.nome AS funcionarioNome
              FROM pontos p JOIN funcionarios f ON f.id = p.funcionarioId
              ${onde}
-             ORDER BY p.dataHora DESC
+             ORDER BY p.dataHora DESC, p.id DESC
              LIMIT ? OFFSET ?`
         ).all(...valores, Number(limite), (Number(pagina) - 1) * Number(limite));
         return { pontos, total: contarPontosFiltrados(filtros) };
@@ -473,7 +473,7 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
             db.prepare('SELECT COUNT(*) AS total FROM solicitacoes WHERE status = ?').get(status).total
         );
         const solicitacoes = db.prepare(
-            'SELECT * FROM solicitacoes WHERE status = ? ORDER BY criadoEm LIMIT ? OFFSET ?'
+            'SELECT * FROM solicitacoes WHERE status = ? ORDER BY criadoEm, id LIMIT ? OFFSET ?'
         ).all(status, Number(limite), (Number(pagina) - 1) * Number(limite)).map(semSenha);
         return { solicitacoes, total };
     }
