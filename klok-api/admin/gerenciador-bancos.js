@@ -19,13 +19,15 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         for (const sufixo of ARQUIVOS_AUXILIARES) rmSync(caminho + sufixo, { force: true });
     }
 
-    function abrir(codigo) {
+    function abrir(codigo, { permitirDesativada = false } = {}) {
         if (!codigoValido(codigo)) {
             return { erro: 'Código de empresa inválido', status: 400 };
         }
         const empresa = catalogo.buscarEmpresa(codigo);
         if (!empresa) return { erro: 'Empresa não encontrada', status: 404 };
-        if (empresa.desativadaEm) return { erro: 'Empresa desativada', status: 403 };
+        if (empresa.desativadaEm && !permitirDesativada) {
+            return { erro: 'Empresa desativada', status: 403 };
+        }
 
         // A consulta ao catálogo acontece em toda abertura de propósito: assim
         // desativar uma empresa vale mesmo que a conexão já esteja no cache.
@@ -81,10 +83,29 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         return catalogo.atualizarEmpresa(codigo, dados);
     }
 
+    function apagar(codigo) {
+        if (!codigoValido(codigo)) {
+            return { erro: 'Código de empresa inválido', status: 400 };
+        }
+        if (!catalogo.buscarEmpresa(codigo)) {
+            return { erro: 'Empresa não encontrada', status: 404 };
+        }
+        const aberto = abertos.get(codigo);
+        if (aberto) {
+            aberto.db.close();
+            abertos.delete(codigo);
+        }
+        if (!catalogo.apagarEmpresa(codigo)) {
+            return { erro: 'Empresa não encontrada', status: 404 };
+        }
+        apagarArquivos(caminhoDe(codigo));
+        return { ok: true };
+    }
+
     function fechar() {
         for (const banco of abertos.values()) banco.db.close();
         abertos.clear();
     }
 
-    return { abrir, criarEmpresa, listar, atualizar, caminhoDe, fechar };
+    return { abrir, criarEmpresa, listar, atualizar, apagar, caminhoDe, fechar };
 }

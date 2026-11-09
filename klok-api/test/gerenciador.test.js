@@ -40,3 +40,22 @@ test('não sobrescreve arquivo órfão', (t) => {
     writeFileSync(join(dir, 'ACME.db'), '');
     assert.equal(g.criarEmpresa({ codigo: 'ACME', nome: 'Acme' }).status, 409);
 });
+
+test('admin abre empresa desativada com permitirDesativada', (t) => {
+    const { catalogo, g } = preparar(t);
+    g.criarEmpresa({ codigo: 'ACME', nome: 'Acme' });
+    catalogo.atualizarEmpresa('ACME', { ativa: false });
+    assert.equal(g.abrir('ACME').status, 403);
+    assert.ok(g.abrir('ACME', { permitirDesativada: true }).banco);
+});
+
+test('apagar empresa remove catálogo e arquivos', (t) => {
+    const { dir, catalogo, g } = preparar(t);
+    g.criarEmpresa({ codigo: 'ACME', nome: 'Acme' });
+    g.abrir('ACME');
+    const resultado = g.apagar('ACME');
+    assert.deepEqual(resultado, { ok: true });
+    assert.equal(catalogo.buscarEmpresa('ACME'), undefined);
+    assert.equal(existsSync(join(dir, 'ACME.db')), false);
+    assert.equal(g.apagar('ACME').status, 404);
+});
