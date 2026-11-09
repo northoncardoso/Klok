@@ -19,7 +19,7 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         for (const sufixo of ARQUIVOS_AUXILIARES) rmSync(caminho + sufixo, { force: true });
     }
 
-    function abrir(codigo, { permitirDesativada = false } = {}) {
+    function abrir(codigo, { permitirDesativada = false, criarSeFaltar = true } = {}) {
         if (!codigoValido(codigo)) {
             return { erro: 'Código de empresa inválido', status: 400 };
         }
@@ -33,6 +33,9 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         // desativar uma empresa vale mesmo que a conexão já esteja no cache.
         let banco = abertos.get(codigo);
         if (!banco) {
+            if (!criarSeFaltar && !existsSync(caminhoDe(codigo))) {
+                return { erro: 'Banco da empresa não encontrado no disco', status: 404 };
+            }
             banco = criarBanco(caminhoDe(codigo), { empresa: codigo });
             abertos.set(codigo, banco);
         }

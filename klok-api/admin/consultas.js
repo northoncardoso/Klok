@@ -1,14 +1,19 @@
 import { statSync } from 'node:fs';
 
+import { codigoEmpresa } from '../validacao.js';
 import { dataIso, inteiroPositivo, paginacao } from './validacao-painel.js';
 
 const STATUS_SOLICITACAO = ['pendente', 'aprovado', 'recusado'];
 
 // Consultas do painel de suporte. Elas abrem a empresa permitindo desativada,
 // porque o painel precisa inspecionar empresa desligada.
+// Rotas de leitura não criam banco: arquivo ausente vira 404, para não atrapalhar a restauração de backup.
 export function criarConsultasAdmin({ gerenciador }) {
     function abrirParaAdmin(codigo) {
-        return gerenciador.abrir(codigo, { permitirDesativada: true });
+        return gerenciador.abrir(codigoEmpresa(codigo), {
+            permitirDesativada: true,
+            criarSeFaltar: false,
+        });
     }
 
     function responderAbertura(res, aberta) {
@@ -75,7 +80,7 @@ export function criarConsultasAdmin({ gerenciador }) {
     }
 
     function listarSolicitacoes(req, res) {
-        const status = req.query.status ?? 'pendente';
+        const status = req.query.status || 'pendente';
         if (!STATUS_SOLICITACAO.includes(status)) {
             return res.status(400).json({ erro: 'Status inválido' });
         }
@@ -98,7 +103,8 @@ export function criarConsultasAdmin({ gerenciador }) {
     function infoBanco(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (!responderAbertura(res, aberta)) return;
-        const caminho = gerenciador.caminhoDe(req.params.codigo);
+        // O 404 de banco ausente já vem da abertura; o statSync é a segunda checagem.
+        const caminho = gerenciador.caminhoDe(aberta.empresa.codigo);
         let tamanhoBytes = 0;
         try {
             tamanhoBytes = statSync(caminho).size;

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, rmSync } from 'node:fs';
 
 import { campoCsv, dataIso, inteiroPositivo, paginacao } from '../admin/validacao-painel.js';
 import { iniciarApp, logarAdmin } from './helpers.js';
@@ -73,6 +74,27 @@ test('pontos pagina, filtra e recusa filtro inválido', async (t) => {
 
     const invalido = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos?de=09/11/2026`, { headers: cabecalhos });
     assert.equal(invalido.status, 400);
+
+    for (const consulta of ['limite=0', 'funcionarioId=abc']) {
+        const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos?${consulta}`, { headers: cabecalhos });
+        assert.equal(resp.status, 400, consulta);
+    }
+});
+
+test('empresa inexistente devolve 404', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+
+    const resp = await fetch(`${s.baseUrl}/api/admin/empresas/NADA/resumo`, { headers: cabecalhos });
+    assert.equal(resp.status, 404);
+});
+
+test('código de empresa em minúsculas funciona nas rotas de leitura', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    s.gerenciador.criarEmpresa({ codigo: 'ACME', nome: 'Acme' });
+
+    const resp = await fetch(`${s.baseUrl}/api/admin/empresas/acme/resumo`, { headers: cabecalhos });
+    assert.equal(resp.status, 200);
+    assert.equal((await resp.json()).codigo, 'ACME');
 });
 
 test('solicitações lista por status e recusa status desconhecido', async (t) => {
@@ -82,17 +104,47 @@ test('solicitações lista por status e recusa status desconhecido', async (t) =
     const lista = await (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/solicitacoes`, { headers: cabecalhos })).json();
     assert.equal(lista.solicitacoes.length, 1);
 
+    const vazio = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/solicitacoes?status=`, { headers: cabecalhos });
+    assert.equal(vazio.status, 200, 'status vazio cai no padrão pendente');
+    assert.equal((await vazio.json()).solicitacoes.length, 1);
+
     const invalido = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/solicitacoes?status=outro`, { headers: cabecalhos });
     assert.equal(invalido.status, 400);
 });
 
 test('painel lê resumo de empresa desativada', async (t) => {
     const { s, cabecalhos } = await prepararPainel(t);
+    s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
     s.catalogo.atualizarEmpresa('TESTE', { ativa: false });
 
     const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/resumo`, { headers: cabecalhos });
     assert.equal(resp.status, 200);
     assert.ok((await resp.json()).desativadaEm);
+
+    const funcionarios = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios`, {
+        headers: cabecalhos,
+    });
+    assert.equal(funcionarios.status, 200);
+    assert.equal((await funcionarios.json())[0].nome, 'Ana');
+});
+
+test('banco ausente no disco devolve 404 e não é recriado', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const caminho = s.gerenciador.caminhoDe('TESTE');
+    for (const sufixo of ['', '-wal', '-shm']) rmSync(caminho + sufixo, { force: true });
+
+    const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco`, { headers: cabecalhos });
+    assert.equal(resp.status, 404);
+    assert.equal(existsSync(caminho), false);
+
+    // Empresa que ainda não está no cache: aqui a abertura é que barra a criação.
+    s.gerenciador.criarEmpresa({ codigo: 'SUMIDA', nome: 'Sumida' });
+    const outro = s.gerenciador.caminhoDe('SUMIDA');
+    for (const sufixo of ['', '-wal', '-shm']) rmSync(outro + sufixo, { force: true });
+
+    const respOutra = await fetch(`${s.baseUrl}/api/admin/empresas/SUMIDA/banco`, { headers: cabecalhos });
+    assert.equal(respOutra.status, 404);
+    assert.equal(existsSync(outro), false);
 });
 
 test('rotas novas exigem token de admin', async (t) => {
