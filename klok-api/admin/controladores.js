@@ -1,8 +1,16 @@
 import { validarNovoCoordenador } from '../controladores/coordenadores.js';
 import { codigoEmpresa, senha as senhaDe, texto } from '../validacao.js';
 import { criarConsultasAdmin } from './consultas.js';
+import { criarEscritasAdmin } from './escritas.js';
 
-export function criarControladoresAdmin({ catalogo, gerenciador, gerarTokenAdmin }) {
+export function criarControladoresAdmin({
+    catalogo,
+    gerenciador,
+    gerarTokenAdmin,
+    gerarTokenEmpresa,
+    enviarEmail,
+    registrar,
+}) {
     async function login(req, res) {
         const usuario = texto(req.body?.usuario, 'usuario');
         const senha = senhaDe(req.body?.senha);
@@ -69,5 +77,6 @@ export function criarControladoresAdmin({ catalogo, gerenciador, gerarTokenAdmin
         atualizarEmpresa,
         criarCoordenador,
         ...criarConsultasAdmin({ gerenciador }),
+        ...criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail, registrar }),
     };
 }

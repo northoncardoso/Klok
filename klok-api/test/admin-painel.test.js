@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, rmSync } from 'node:fs';
 
 import { campoCsv, dataIso, inteiroPositivo, paginacao } from '../admin/validacao-painel.js';
-import { iniciarApp, logarAdmin } from './helpers.js';
+import { iniciarApp, logar, logarAdmin } from './helpers.js';
 
 test('valida inteiro, data e paginação', () => {
     assert.equal(inteiroPositivo('7', 1), 7);
@@ -27,12 +27,13 @@ test('escapa campo de CSV', () => {
     assert.equal(campoCsv('linha\nquebrada'), '"linha\nquebrada"');
 });
 
-async function prepararPainel(t) {
-    const s = await iniciarApp();
+async function prepararPainel(t, opcoes = {}) {
+    const registros = [];
+    const s = await iniciarApp({ ...opcoes, registrar: (linha) => registros.push(linha) });
     t.after(() => s.fechar());
     const token = await logarAdmin(s.baseUrl, 'root', 'senha-admin-teste');
     const cabecalhos = { authorization: `Bearer ${token}` };
-    return { s, token, cabecalhos };
+    return { s, token, cabecalhos, registros };
 }
 
 test('resumo, coordenadores, funcionários e banco por empresa', async (t) => {
@@ -147,6 +148,80 @@ test('banco ausente no disco devolve 404 e não é recriado', async (t) => {
     assert.equal(existsSync(outro), false);
 });
 
+test('redefine senha de coordenador e invalida token antigo', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const antigo = await logar(s.baseUrl, 'coordenador', 'senha-coordenador-teste', 'TESTE');
+    const coordenadores = await (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/coordenadores`, { headers: cabecalhos })).json();
+
+    const resposta = await fetch(
+        `${s.baseUrl}/api/admin/empresas/TESTE/coordenadores/${coordenadores[0].id}/senha`,
+        {
+            method: 'POST',
+            headers: { ...cabecalhos, 'content-type': 'application/json' },
+            body: JSON.stringify({ senha: 'senha-nova-1234' }),
+        }
+    );
+    assert.equal(resposta.status, 204);
+    assert.ok(await logar(s.baseUrl, 'coordenador', 'senha-nova-1234', 'TESTE'));
+    assert.equal(
+        (await fetch(`${s.baseUrl}/api/funcionarios`, { headers: { authorization: `Bearer ${antigo}` } })).status,
+        401
+    );
+});
+
+test('recusa senha curta e id que não é coordenador', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const usuarioFuncionario = s.banco.criarUsuarioLocal('ana', 'senha-1234', 'Ana');
+    const coordenadores = await (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/coordenadores`, { headers: cabecalhos })).json();
+
+    const curta = await fetch(
+        `${s.baseUrl}/api/admin/empresas/TESTE/coordenadores/${coordenadores[0].id}/senha`,
+        {
+            method: 'POST',
+            headers: { ...cabecalhos, 'content-type': 'application/json' },
+            body: JSON.stringify({ senha: '12' }),
+        }
+    );
+    assert.equal(curta.status, 400);
+
+    const errado = await fetch(
+        `${s.baseUrl}/api/admin/empresas/TESTE/coordenadores/${usuarioFuncionario.id}/senha`,
+        {
+            method: 'POST',
+            headers: { ...cabecalhos, 'content-type': 'application/json' },
+            body: JSON.stringify({ senha: 'senha-1234' }),
+        }
+    );
+    assert.equal(errado.status, 404);
+});
+
+test('impersona coordenador e recusa funcionário', async (t) => {
+    const { s, cabecalhos, registros } = await prepararPainel(t);
+    const usuarioFuncionario = s.banco.criarUsuarioLocal('ana', 'senha-1234', 'Ana');
+    const coordenadores = await (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/coordenadores`, { headers: cabecalhos })).json();
+
+    const resposta = await fetch(
+        `${s.baseUrl}/api/admin/empresas/TESTE/coordenadores/${coordenadores[0].id}/impersonar`,
+        { method: 'POST', headers: cabecalhos }
+    );
+    assert.equal(resposta.status, 200);
+    const { token, empresa, tipo } = await resposta.json();
+    assert.equal(empresa, 'TESTE');
+    assert.equal(tipo, 'coordenador');
+    assert.equal(registros.length, 1);
+    assert.match(registros[0], /admin root impersonou coordenador na empresa TESTE/);
+    assert.equal(
+        (await fetch(`${s.baseUrl}/api/funcionarios`, { headers: { authorization: `Bearer ${token}` } })).status,
+        200
+    );
+
+    const errado = await fetch(
+        `${s.baseUrl}/api/admin/empresas/TESTE/coordenadores/${usuarioFuncionario.id}/impersonar`,
+        { method: 'POST', headers: cabecalhos }
+    );
+    assert.equal(errado.status, 404);
+});
+
 test('rotas novas exigem token de admin', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
@@ -160,5 +235,12 @@ test('rotas novas exigem token de admin', async (t) => {
     ];
     for (const rota of rotas) {
         assert.equal((await fetch(`${s.baseUrl}${rota}`)).status, 401, rota);
+    }
+
+    for (const rota of [
+        '/api/admin/empresas/TESTE/coordenadores/1/senha',
+        '/api/admin/empresas/TESTE/coordenadores/1/impersonar',
+    ]) {
+        assert.equal((await fetch(`${s.baseUrl}${rota}`, { method: 'POST' })).status, 401, rota);
     }
 });
