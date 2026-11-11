@@ -135,6 +135,18 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         res.json({ sucesso: true });
     }
 
+    // Apagar empresa é irreversível, então o cabeçalho obriga o operador a
+    // digitar o código e evita derrubar a empresa errada.
+    function apagarEmpresa(req, res) {
+        const codigo = codigoEmpresa(req.params.codigo);
+        if (codigoEmpresa(req.get('x-confirmar-codigo')) !== codigo) {
+            return res.status(400).json({ erro: 'Confirmação do código da empresa não confere' });
+        }
+        const resultado = gerenciador.apagar(codigo);
+        if (resultado.erro) return res.status(resultado.status).json({ erro: resultado.erro });
+        res.status(204).end();
+    }
+
     return {
         redefinirSenhaCoordenador,
         impersonarCoordenador,
@@ -142,5 +154,6 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         apagarFuncionario,
         aprovarSolicitacao,
         recusarSolicitacao,
+        apagarEmpresa,
     };
 }

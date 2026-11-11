@@ -14,6 +14,7 @@ export function criarRotaAdmin(deps) {
     rota.get('/empresas', autenticarAdmin, seguro(c.listarEmpresas));
     rota.post('/empresas', autenticarAdmin, seguro(c.criarEmpresa));
     rota.patch('/empresas/:codigo', autenticarAdmin, seguro(c.atualizarEmpresa));
+    rota.delete('/empresas/:codigo', autenticarAdmin, seguro(c.apagarEmpresa));
     rota.post('/empresas/:codigo/coordenador', autenticarAdmin, seguro(c.criarCoordenador));
     rota.get('/empresas/:codigo/resumo', autenticarAdmin, seguro(c.resumo));
     rota.get('/empresas/:codigo/coordenadores', autenticarAdmin, seguro(c.listarCoordenadores));

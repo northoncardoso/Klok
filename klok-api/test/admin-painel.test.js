@@ -318,6 +318,37 @@ test('edita e apaga recusam funcionário inexistente', async (t) => {
     );
 });
 
+test('apaga empresa com confirmação do código e some com o WAL', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const caminho = s.gerenciador.caminhoDe('TESTE');
+
+    const errada = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE`, {
+        method: 'DELETE',
+        headers: { ...cabecalhos, 'x-confirmar-codigo': 'OUTRA' },
+    });
+    assert.equal(errada.status, 400);
+    assert.ok(s.catalogo.buscarEmpresa('TESTE'));
+
+    const certa = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE`, {
+        method: 'DELETE',
+        headers: { ...cabecalhos, 'x-confirmar-codigo': 'TESTE' },
+    });
+    assert.equal(certa.status, 204);
+    assert.equal(s.catalogo.buscarEmpresa('TESTE'), undefined);
+    assert.equal(existsSync(caminho), false);
+    assert.equal(existsSync(`${caminho}-wal`), false);
+    assert.equal(existsSync(`${caminho}-shm`), false);
+
+    // O código digitado pode vir em minúsculas, como nas outras rotas do painel.
+    s.gerenciador.criarEmpresa({ codigo: 'ACME', nome: 'Acme' });
+    const minuscula = await fetch(`${s.baseUrl}/api/admin/empresas/acme`, {
+        method: 'DELETE',
+        headers: { ...cabecalhos, 'x-confirmar-codigo': 'acme' },
+    });
+    assert.equal(minuscula.status, 204);
+    assert.equal(s.catalogo.buscarEmpresa('ACME'), undefined);
+});
+
 test('rotas novas exigem token de admin', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
@@ -349,4 +380,10 @@ test('rotas novas exigem token de admin', async (t) => {
             metodo
         );
     }
+
+    assert.equal(
+        (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE`, { method: 'DELETE' })).status,
+        401,
+        'apagar empresa'
+    );
 });
