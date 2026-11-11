@@ -2,6 +2,7 @@ import { validarNovoCoordenador } from '../controladores/coordenadores.js';
 import { codigoEmpresa, senha as senhaDe, texto } from '../validacao.js';
 import { criarConsultasAdmin } from './consultas.js';
 import { criarEscritasAdmin } from './escritas.js';
+import { criarExportacoesAdmin } from './exportacoes.js';
 
 export function criarControladoresAdmin({
     catalogo,
@@ -78,5 +79,6 @@ export function criarControladoresAdmin({
         criarCoordenador,
         ...criarConsultasAdmin({ gerenciador }),
         ...criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail, registrar }),
+        ...criarExportacoesAdmin({ gerenciador }),
     };
 }

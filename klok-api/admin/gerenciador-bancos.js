@@ -86,6 +86,15 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         return catalogo.atualizarEmpresa(codigo, dados);
     }
 
+    // Fecha só a conexão em cache de uma empresa. É o que a restauração de
+    // backup precisa antes de trocar o arquivo no disco, sem derrubar as outras.
+    function fecharBanco(codigo) {
+        const aberto = abertos.get(codigo);
+        if (!aberto) return;
+        aberto.db.close();
+        abertos.delete(codigo);
+    }
+
     function apagar(codigo) {
         if (!codigoValido(codigo)) {
             return { erro: 'Código de empresa inválido', status: 400 };
@@ -93,11 +102,7 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         if (!catalogo.buscarEmpresa(codigo)) {
             return { erro: 'Empresa não encontrada', status: 404 };
         }
-        const aberto = abertos.get(codigo);
-        if (aberto) {
-            aberto.db.close();
-            abertos.delete(codigo);
-        }
+        fecharBanco(codigo);
         if (!catalogo.apagarEmpresa(codigo)) {
             return { erro: 'Empresa não encontrada', status: 404 };
         }
@@ -105,10 +110,11 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         return { ok: true };
     }
 
+    // Fecha todas as conexões em cache, usado no encerramento do processo.
     function fechar() {
         for (const banco of abertos.values()) banco.db.close();
         abertos.clear();
     }
 
-    return { abrir, criarEmpresa, listar, atualizar, apagar, caminhoDe, fechar };
+    return { abrir, criarEmpresa, listar, atualizar, apagar, caminhoDe, fecharBanco, fechar };
 }
