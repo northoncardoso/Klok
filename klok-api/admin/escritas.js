@@ -1,6 +1,7 @@
 import { MINIMO_SENHA } from '../controladores/coordenadores.js';
 import { prepararDadosFuncionario } from '../controladores/funcionarios.js';
 import { PAPEL_COORDENADOR } from '../constantes.js';
+import { aprovarPedido, recusarPedido } from '../servicos/solicitacoes.js';
 import { codigoEmpresa, senha as senhaDe } from '../validacao.js';
 
 // Escritas do painel de suporte. Como as consultas, elas abrem a empresa
@@ -101,5 +102,45 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         res.status(204).end();
     }
 
-    return { redefinirSenhaCoordenador, impersonarCoordenador, atualizarFuncionario, apagarFuncionario };
+    // A decisão do pedido passa pelo serviço compartilhado com o app, então a
+    // regra de aprovação e o aviso por email ficam em um lugar só.
+    async function aprovarSolicitacao(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (!responderAbertura(res, aberta)) return;
+
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) {
+            return res.status(404).json({ erro: 'Pedido não encontrado' });
+        }
+        const resultado = await aprovarPedido({
+            banco: aberta.banco,
+            empresa: aberta.empresa.codigo,
+            id,
+            enviarEmail,
+        });
+        if (resultado.erro) return res.status(resultado.status).json({ erro: resultado.erro });
+        res.status(201).json(resultado.funcionario);
+    }
+
+    function recusarSolicitacao(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (!responderAbertura(res, aberta)) return;
+
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) {
+            return res.status(404).json({ erro: 'Pedido não encontrado' });
+        }
+        const resultado = recusarPedido({ banco: aberta.banco, id });
+        if (resultado.erro) return res.status(resultado.status).json({ erro: resultado.erro });
+        res.json({ sucesso: true });
+    }
+
+    return {
+        redefinirSenhaCoordenador,
+        impersonarCoordenador,
+        atualizarFuncionario,
+        apagarFuncionario,
+        aprovarSolicitacao,
+        recusarSolicitacao,
+    };
 }

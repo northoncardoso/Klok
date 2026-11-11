@@ -22,6 +22,8 @@ export function criarRotaAdmin(deps) {
     rota.delete('/empresas/:codigo/funcionarios/:id', autenticarAdmin, seguro(c.apagarFuncionario));
     rota.get('/empresas/:codigo/pontos', autenticarAdmin, seguro(c.listarPontos));
     rota.get('/empresas/:codigo/solicitacoes', autenticarAdmin, seguro(c.listarSolicitacoes));
+    rota.post('/empresas/:codigo/solicitacoes/:id/aprovar', autenticarAdmin, seguro(c.aprovarSolicitacao));
+    rota.post('/empresas/:codigo/solicitacoes/:id/recusar', autenticarAdmin, seguro(c.recusarSolicitacao));
     rota.get('/empresas/:codigo/banco', autenticarAdmin, seguro(c.infoBanco));
     rota.post('/empresas/:codigo/coordenadores/:id/senha', autenticarAdmin, seguro(c.redefinirSenhaCoordenador));
     rota.post('/empresas/:codigo/coordenadores/:id/impersonar', autenticarAdmin, seguro(c.impersonarCoordenador));

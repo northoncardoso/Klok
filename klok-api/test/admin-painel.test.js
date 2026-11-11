@@ -113,6 +113,41 @@ test('solicitações lista por status e recusa status desconhecido', async (t) =
     assert.equal(invalido.status, 400);
 });
 
+test('aprova solicitação pelo painel e avisa por email', async (t) => {
+    const emails = [];
+    const s = await iniciarApp({ enviarEmail: async (dados) => emails.push(dados) });
+    t.after(() => s.fechar());
+    const token = await logarAdmin(s.baseUrl, 'root', 'senha-admin-teste');
+    const cabecalhos = { authorization: `Bearer ${token}` };
+    const pedido = s.banco.criarSolicitacao({ usuario: 'bia', nome: 'Bia', email: 'bia@teste.com' });
+
+    const resposta = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/solicitacoes/${pedido.id}/aprovar`, {
+        method: 'POST',
+        headers: cabecalhos,
+    });
+    assert.equal(resposta.status, 201);
+    assert.equal(s.banco.buscarUsuarioPorLogin('bia').usuario, 'bia');
+    assert.equal(emails.length, 1);
+
+    const deNovo = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/solicitacoes/${pedido.id}/aprovar`, {
+        method: 'POST',
+        headers: cabecalhos,
+    });
+    assert.equal(deNovo.status, 409);
+    assert.equal(emails.length, 1, 'segunda aprovação não pode avisar de novo');
+});
+
+test('recusa solicitação pelo painel', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const pedido = s.banco.criarSolicitacao({ usuario: 'bia', nome: 'Bia', email: 'bia@teste.com' });
+    const resposta = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/solicitacoes/${pedido.id}/recusar`, {
+        method: 'POST',
+        headers: cabecalhos,
+    });
+    assert.equal(resposta.status, 200);
+    assert.equal(s.banco.buscarSolicitacaoPorId(pedido.id).status, 'recusado');
+});
+
 test('painel lê resumo de empresa desativada', async (t) => {
     const { s, cabecalhos } = await prepararPainel(t);
     s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
@@ -281,6 +316,8 @@ test('rotas novas exigem token de admin', async (t) => {
     for (const rota of [
         '/api/admin/empresas/TESTE/coordenadores/1/senha',
         '/api/admin/empresas/TESTE/coordenadores/1/impersonar',
+        '/api/admin/empresas/TESTE/solicitacoes/1/aprovar',
+        '/api/admin/empresas/TESTE/solicitacoes/1/recusar',
     ]) {
         assert.equal((await fetch(`${s.baseUrl}${rota}`, { method: 'POST' })).status, 401, rota);
     }
