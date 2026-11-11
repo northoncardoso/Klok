@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 
 import { campoCsv, dataIso, inteiroPositivo, paginacao } from '../admin/validacao-painel.js';
 import { iniciarApp, logar, logarAdmin } from './helpers.js';
@@ -328,6 +328,16 @@ test('apaga empresa com confirmação do código e some com o WAL', async (t) =>
     });
     assert.equal(errada.status, 400);
     assert.ok(s.catalogo.buscarEmpresa('TESTE'));
+
+    // Fechar a conexão WAL já leva o `-wal` e o `-shm` embora, então as
+    // asserções de remoção seriam vazias. Recriar os dois à mão depois de
+    // fechar torna o teste discriminante: se o gerenciador parar de apagar os
+    // auxiliares, os arquivos continuam no disco e o teste falha.
+    s.gerenciador.fecharBanco('TESTE');
+    writeFileSync(`${caminho}-wal`, 'wal');
+    writeFileSync(`${caminho}-shm`, 'shm');
+    assert.ok(existsSync(`${caminho}-wal`));
+    assert.ok(existsSync(`${caminho}-shm`));
 
     const certa = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE`, {
         method: 'DELETE',
