@@ -107,6 +107,11 @@ test('falha na troca do arquivo mantém o banco anterior no lugar', async (t) =>
         await (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco/backup`, { headers: cabecalhos })).arrayBuffer()
     );
 
+    // O banco atual fica sem a Ana, mas o backup tem a Ana. Assim, se a troca
+    // acontecesse mesmo com a falha, o teste veria 1 funcionário e falharia.
+    s.banco.apagarFuncionario(funcionarioId);
+    assert.equal(s.banco.listarFuncionarios().length, 0);
+
     // Injeta a falha exatamente na janela perigosa: depois de fechar a conexão
     // e antes de o arquivo novo ocupar o lugar. Com um diretório no caminho do
     // -wal, a limpeza dos auxiliares estoura e o rename nunca acontece.
@@ -135,6 +140,7 @@ test('falha na troca do arquivo mantém o banco anterior no lugar', async (t) =>
     rmSync(`${caminho}-wal`, { recursive: true, force: true });
     const depois = criarBanco(caminho, { empresa: 'TESTE' });
     t.after(() => depois.db.close());
-    assert.equal(depois.listarFuncionarios().length, 1);
-    assert.equal(depois.listarTodosPontos().length, 1);
+    // Zero funcionário prova que o arquivo em disco é o anterior, não o backup.
+    assert.equal(depois.listarFuncionarios().length, 0);
+    assert.equal(depois.listarTodosPontos().length, 0);
 });
