@@ -126,6 +126,8 @@ test('aprova solicitação pelo painel e avisa por email', async (t) => {
         headers: cabecalhos,
     });
     assert.equal(resposta.status, 201);
+    const criado = await resposta.json();
+    assert.equal(criado.nome, 'Bia');
     assert.equal(s.banco.buscarUsuarioPorLogin('bia').usuario, 'bia');
     assert.equal(emails.length, 1);
 
@@ -135,6 +137,24 @@ test('aprova solicitação pelo painel e avisa por email', async (t) => {
     });
     assert.equal(deNovo.status, 409);
     assert.equal(emails.length, 1, 'segunda aprovação não pode avisar de novo');
+});
+
+test('aprova solicitação de empresa desativada', async (t) => {
+    const emails = [];
+    const s = await iniciarApp({ enviarEmail: async (dados) => emails.push(dados) });
+    t.after(() => s.fechar());
+    const token = await logarAdmin(s.baseUrl, 'root', 'senha-admin-teste');
+    const cabecalhos = { authorization: `Bearer ${token}` };
+    const pedido = s.banco.criarSolicitacao({ usuario: 'caio', nome: 'Caio', email: 'caio@teste.com' });
+    s.catalogo.atualizarEmpresa('TESTE', { ativa: false });
+
+    const resposta = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/solicitacoes/${pedido.id}/aprovar`, {
+        method: 'POST',
+        headers: cabecalhos,
+    });
+    assert.equal(resposta.status, 201, 'suporte precisa decidir pedido de empresa desativada');
+    assert.equal(emails.length, 1);
+    assert.equal(s.banco.buscarUsuarioPorLogin('caio').usuario, 'caio');
 });
 
 test('recusa solicitação pelo painel', async (t) => {
