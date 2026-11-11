@@ -1,4 +1,5 @@
 import { MINIMO_SENHA } from '../controladores/coordenadores.js';
+import { prepararDadosFuncionario } from '../controladores/funcionarios.js';
 import { PAPEL_COORDENADOR } from '../constantes.js';
 import { codigoEmpresa, senha as senhaDe } from '../validacao.js';
 
@@ -68,5 +69,37 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         });
     }
 
-    return { redefinirSenhaCoordenador, impersonarCoordenador };
+    // A edição mexe nas duas tabelas: a linha de funcionarios e, quando o
+    // funcionário tem login, a linha de usuarios ligada a ele.
+    function atualizarFuncionario(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (!responderAbertura(res, aberta)) return;
+
+        const id = Number(req.params.id);
+        if (!aberta.banco.buscarFuncionario(id)) {
+            return res.status(404).json({ erro: 'Funcionário não encontrado' });
+        }
+        const dados = prepararDadosFuncionario(req.body);
+        if (dados.erro) return res.status(dados.status).json({ erro: dados.erro });
+
+        aberta.banco.atualizarFuncionario(id, dados.nome, dados.numero, dados.email);
+        const usuario = aberta.banco.buscarUsuarioPorFuncionarioId(id);
+        if (usuario) {
+            aberta.banco.atualizarDadosUsuarios(usuario.id, dados.nome, dados.numero, dados.email);
+        }
+        res.json(aberta.banco.buscarFuncionario(id));
+    }
+
+    function apagarFuncionario(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (!responderAbertura(res, aberta)) return;
+
+        // apagarFuncionario do banco remove pontos e usuário na mesma transação.
+        if (!aberta.banco.apagarFuncionario(Number(req.params.id))) {
+            return res.status(404).json({ erro: 'Funcionário não encontrado' });
+        }
+        res.status(204).end();
+    }
+
+    return { redefinirSenhaCoordenador, impersonarCoordenador, atualizarFuncionario, apagarFuncionario };
 }

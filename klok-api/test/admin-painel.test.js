@@ -222,6 +222,47 @@ test('impersona coordenador e recusa funcionário', async (t) => {
     assert.equal(errado.status, 404);
 });
 
+test('edita funcionário nas duas tabelas e apaga', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const funcionarioId = s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
+    s.banco.db.prepare(
+        "INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, empresa) VALUES (?, ?, 'funcionario', ?, 'TESTE')"
+    ).run('ana', s.banco.criarHashSenha('senha-1234'), funcionarioId);
+    s.banco.baterPonto(funcionarioId, 'entrada');
+
+    const editado = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios/${funcionarioId}`, {
+        method: 'PATCH',
+        headers: { ...cabecalhos, 'content-type': 'application/json' },
+        body: JSON.stringify({ nome: 'Ana Lima', numero: '2', email: 'ana.lima@teste.com' }),
+    });
+    assert.equal(editado.status, 200);
+    assert.equal((await editado.json()).nome, 'Ana Lima');
+    const usuario = s.banco.buscarUsuarioPorFuncionarioId(funcionarioId);
+    assert.equal(usuario.nome, 'Ana Lima');
+
+    const apagado = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios/${funcionarioId}`, {
+        method: 'DELETE',
+        headers: cabecalhos,
+    });
+    assert.equal(apagado.status, 204);
+    assert.equal(s.banco.buscarFuncionario(funcionarioId), undefined);
+    assert.equal(s.banco.buscarUsuarioPorFuncionarioId(funcionarioId), undefined);
+});
+
+test('edita e apaga recusam funcionário inexistente', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const editar = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios/999`, {
+        method: 'PATCH',
+        headers: { ...cabecalhos, 'content-type': 'application/json' },
+        body: JSON.stringify({ nome: 'Nada' }),
+    });
+    assert.equal(editar.status, 404);
+    assert.equal(
+        (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios/999`, { method: 'DELETE', headers: cabecalhos })).status,
+        404
+    );
+});
+
 test('rotas novas exigem token de admin', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
@@ -242,5 +283,13 @@ test('rotas novas exigem token de admin', async (t) => {
         '/api/admin/empresas/TESTE/coordenadores/1/impersonar',
     ]) {
         assert.equal((await fetch(`${s.baseUrl}${rota}`, { method: 'POST' })).status, 401, rota);
+    }
+
+    for (const metodo of ['PATCH', 'DELETE']) {
+        assert.equal(
+            (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios/1`, { method: metodo })).status,
+            401,
+            metodo
+        );
     }
 });
