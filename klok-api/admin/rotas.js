@@ -11,6 +11,8 @@ export function criarRotaAdmin(deps) {
 
     // O login é a única rota pública. Todas as outras exigem token de admin.
     rota.post('/login', limitadores.adminLogin, seguro(c.login));
+    // Logout só limpa cookie, mas passa pela autenticação para o CSRF valer.
+    rota.post('/logout', autenticarAdmin, seguro(c.logout));
     rota.get('/empresas', autenticarAdmin, seguro(c.listarEmpresas));
     rota.post('/empresas', autenticarAdmin, seguro(c.criarEmpresa));
     rota.patch('/empresas/:codigo', autenticarAdmin, seguro(c.atualizarEmpresa));

@@ -1,4 +1,5 @@
 import { jwtVerify } from 'jose';
+import { csrfValido, tokenDoCookie } from './admin/sessao.js';
 import { PAPEL_COORDENADOR } from './constantes.js';
 import { codigoEmpresa } from './validacao.js';
 
@@ -66,12 +67,15 @@ export function criarAutenticar({ gerenciador, segredo }) {
 
 export function criarAutenticarAdmin({ catalogo, segredo }) {
     return async function autenticarAdmin(req, res, next) {
+        // Duas formas convivem: Bearer para CLI e testes, cookie para o painel.
         const header = req.headers.authorization;
-        if (!header?.startsWith('Bearer ')) {
+        const porBearer = header?.startsWith('Bearer ') === true;
+        const token = porBearer ? header.slice(7) : tokenDoCookie(req);
+        if (!token) {
             return res.status(401).json({ erro: 'Token não informado' });
         }
         try {
-            const { payload } = await jwtVerify(header.slice(7), segredo, {
+            const { payload } = await jwtVerify(token, segredo, {
                 algorithms: ['HS256'],
                 audience: AUD_ADMIN,
             });
@@ -79,6 +83,12 @@ export function criarAutenticarAdmin({ catalogo, segredo }) {
             if (!admin) return res.status(401).json({ erro: 'Admin não encontrado' });
             if (tokenAnteriorATrocaDeSenha(payload, admin)) {
                 return res.status(401).json({ erro: 'Sessão expirada, entre com a senha nova' });
+            }
+            // O CSRF só vale para o cookie, porque só ele viaja sozinho no
+            // navegador. A checagem vem depois do token para não dar 403 a quem
+            // nem está autenticado.
+            if (!porBearer && !csrfValido(req)) {
+                return res.status(403).json({ erro: 'CSRF inválido' });
             }
             req.admin = admin;
             next();
