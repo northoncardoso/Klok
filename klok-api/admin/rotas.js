@@ -19,9 +19,11 @@ export function criarRotaAdmin(deps) {
     rota.get('/empresas/:codigo/resumo', autenticarAdmin, seguro(c.resumo));
     rota.get('/empresas/:codigo/coordenadores', autenticarAdmin, seguro(c.listarCoordenadores));
     rota.get('/empresas/:codigo/funcionarios', autenticarAdmin, seguro(c.listarFuncionarios));
+    rota.get('/empresas/:codigo/funcionarios.csv', autenticarAdmin, seguro(c.exportarFuncionariosCsv));
     rota.patch('/empresas/:codigo/funcionarios/:id', autenticarAdmin, seguro(c.atualizarFuncionario));
     rota.delete('/empresas/:codigo/funcionarios/:id', autenticarAdmin, seguro(c.apagarFuncionario));
     rota.get('/empresas/:codigo/pontos', autenticarAdmin, seguro(c.listarPontos));
+    rota.get('/empresas/:codigo/pontos.csv', autenticarAdmin, seguro(c.exportarPontosCsv));
     rota.get('/empresas/:codigo/solicitacoes', autenticarAdmin, seguro(c.listarSolicitacoes));
     rota.post('/empresas/:codigo/solicitacoes/:id/aprovar', autenticarAdmin, seguro(c.aprovarSolicitacao));
     rota.post('/empresas/:codigo/solicitacoes/:id/recusar', autenticarAdmin, seguro(c.recusarSolicitacao));

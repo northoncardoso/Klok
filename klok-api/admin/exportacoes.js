@@ -5,8 +5,12 @@ import { join } from 'node:path';
 
 import { MIGRACOES } from '../db.js';
 import { codigoEmpresa } from '../validacao.js';
+import { campoCsv, dataIso, inteiroPositivo } from './validacao-painel.js';
 
 const ASSINATURA_SQLITE = 'SQLite format 3\u0000';
+// Limite do CSV de pontos: acima disso a planilha fica pesada demais para o
+// painel e o certo é filtrar por funcionário ou período.
+const LIMITE_CSV_PONTOS = 10000;
 
 // Exportação e importação do banco de uma empresa pelo painel.
 //
@@ -14,11 +18,15 @@ const ASSINATURA_SQLITE = 'SQLite format 3\u0000';
 // removido antes de o substituto estar validado e pronto no mesmo diretório.
 // Assim a empresa nunca fica sem banco, mesmo se algo falhar no meio.
 export function criarExportacoesAdmin({ gerenciador }) {
-    function backup(req, res) {
-        const aberta = gerenciador.abrir(codigoEmpresa(req.params.codigo), {
+    function abrirParaAdmin(codigo) {
+        return gerenciador.abrir(codigoEmpresa(codigo), {
             permitirDesativada: true,
             criarSeFaltar: false,
         });
+    }
+
+    function backup(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
         if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
 
         const dir = mkdtempSync(join(tmpdir(), 'klok-backup-'));
@@ -132,5 +140,68 @@ export function criarExportacoesAdmin({ gerenciador }) {
         res.json({ sucesso: true, versao: reaberta.banco.userVersion() });
     }
 
-    return { backup, restaurarBackup };
+    // O Excel em português espera ponto e vírgula, BOM para acertar o acento e
+    // CRLF para a quebra de linha. Fora isso o CSV é texto puro.
+    function enviarCsv(res, nome, linhas) {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+        res.send(`\uFEFF${linhas.join('\r\n')}\r\n`);
+    }
+
+    function nomeDoArquivo(empresa, assunto) {
+        return `klok-${empresa.codigo}-${assunto}-${new Date().toISOString().slice(0, 10)}.csv`;
+    }
+
+    function exportarFuncionariosCsv(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
+
+        const linhas = ['id;nome;numero;email'];
+        for (const funcionario of aberta.banco.listarFuncionarios()) {
+            linhas.push(
+                [funcionario.id, funcionario.nome, funcionario.numero, funcionario.email].map(campoCsv).join(';')
+            );
+        }
+        enviarCsv(res, nomeDoArquivo(aberta.empresa, 'funcionarios'), linhas);
+    }
+
+    function exportarPontosCsv(req, res) {
+        // Mesmas mensagens das rotas de leitura do painel, para o app tratar igual.
+        const funcionarioId = inteiroPositivo(req.query.funcionarioId);
+        if (req.query.funcionarioId && funcionarioId === null) {
+            return res.status(400).json({ erro: 'Funcionário inválido' });
+        }
+        const de = dataIso(req.query.de);
+        if (req.query.de && de === null) return res.status(400).json({ erro: 'Data inicial inválida' });
+        const ate = dataIso(req.query.ate);
+        if (req.query.ate && ate === null) return res.status(400).json({ erro: 'Data final inválida' });
+
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
+
+        const total = aberta.banco.contarPontosFiltrados({ funcionarioId, de, ate });
+        if (total > LIMITE_CSV_PONTOS) {
+            return res.status(400).json({ erro: 'Mais de 10.000 pontos. Filtre por funcionário ou período.' });
+        }
+
+        const { pontos } = aberta.banco.listarPontosFiltrados({
+            funcionarioId,
+            de,
+            ate,
+            limite: LIMITE_CSV_PONTOS,
+            pagina: 1,
+        });
+
+        const linhas = ['id;funcionario;dataHora;tipo'];
+        for (const ponto of pontos) {
+            // Data legível no fuso da empresa, sem a vírgula que o formato em português insere.
+            const quando = new Date(ponto.dataHora)
+                .toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                .replace(', ', ' ');
+            linhas.push([ponto.id, ponto.funcionarioNome, quando, ponto.tipo].map(campoCsv).join(';'));
+        }
+        enviarCsv(res, nomeDoArquivo(aberta.empresa, 'pontos'), linhas);
+    }
+
+    return { backup, restaurarBackup, exportarFuncionariosCsv, exportarPontosCsv };
 }

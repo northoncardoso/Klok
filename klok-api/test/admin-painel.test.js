@@ -366,7 +366,9 @@ test('rotas novas exigem token de admin', async (t) => {
         '/api/admin/empresas/TESTE/resumo',
         '/api/admin/empresas/TESTE/coordenadores',
         '/api/admin/empresas/TESTE/funcionarios',
+        '/api/admin/empresas/TESTE/funcionarios.csv',
         '/api/admin/empresas/TESTE/pontos',
+        '/api/admin/empresas/TESTE/pontos.csv',
         '/api/admin/empresas/TESTE/solicitacoes',
         '/api/admin/empresas/TESTE/banco',
     ];
@@ -396,4 +398,50 @@ test('rotas novas exigem token de admin', async (t) => {
         401,
         'apagar empresa'
     );
+});
+
+test('exporta funcionários e pontos em CSV', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const ana = s.banco.criarFuncionario('Ana; Lima', '1', 'ana@teste.com');
+    s.banco.baterPonto(ana, 'entrada');
+
+    // O fetch descarta o BOM ao decodificar texto, então o teste olha os bytes.
+    async function textoCsv(resp) {
+        const bytes = Buffer.from(await resp.arrayBuffer());
+        assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'CSV precisa começar com BOM');
+        return bytes.subarray(3).toString('utf8');
+    }
+
+    const funcionarios = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios.csv`, { headers: cabecalhos });
+    assert.equal(funcionarios.status, 200);
+    assert.match(funcionarios.headers.get('content-type'), /text\/csv/);
+    const textoFuncionarios = await textoCsv(funcionarios);
+    assert.ok(textoFuncionarios.startsWith('id;nome;numero;email\r\n'));
+    assert.match(textoFuncionarios, /"Ana; Lima"/);
+
+    const pontos = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos.csv`, { headers: cabecalhos });
+    assert.equal(pontos.status, 200);
+    const textoPontos = await textoCsv(pontos);
+    assert.ok(textoPontos.startsWith('id;funcionario;dataHora;tipo\r\n'));
+    assert.match(textoPontos, /Ana; Lima/);
+
+    const invalido = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos.csv?de=09/11/2026`, {
+        headers: cabecalhos,
+    });
+    assert.equal(invalido.status, 400);
+    assert.equal((await invalido.json()).erro, 'Data inicial inválida');
+});
+
+test('CSV de pontos recusa mais de 10.000 linhas', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const ana = s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
+    s.banco.db.exec('BEGIN');
+    const inserir = s.banco.db.prepare('INSERT INTO pontos (funcionarioId, dataHora, tipo) VALUES (?, ?, ?)');
+    for (let i = 0; i < 10001; i += 1) {
+        inserir.run(ana, new Date(Date.now() + i).toISOString(), 'entrada');
+    }
+    s.banco.db.exec('COMMIT');
+
+    const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos.csv`, { headers: cabecalhos });
+    assert.equal(resp.status, 400);
 });
