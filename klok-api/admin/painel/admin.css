@@ -156,6 +156,27 @@ button.secundario:hover {
     background: #eef3fd;
 }
 
+.paginacao {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 0.75rem 0 0;
+}
+
+.paginacao p {
+    margin: 0;
+}
+
+.paginacao button {
+    margin-top: 0;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .tabela-rolagem {
     overflow-x: auto;
     margin-top: 0.75rem;

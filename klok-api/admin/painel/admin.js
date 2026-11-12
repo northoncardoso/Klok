@@ -9,6 +9,7 @@ const estado = {
     selecionada: null,
     csrf: '',
     pontosPagina: 1,
+    pontosPaginas: 0,
 };
 
 const FORMATO_DATA_HORA = new Intl.DateTimeFormat('pt-BR', {
@@ -34,7 +35,10 @@ function mensagem(id, texto, tipo = 'erro') {
 }
 
 function csrfDoCookie() {
-    const par = document.cookie.split('; ').find((item) => item.startsWith('klok_csrf='));
+    const par = document.cookie
+        .split(';')
+        .map((item) => item.trim())
+        .find((item) => item.startsWith('klok_csrf='));
     return par ? par.slice('klok_csrf='.length) : '';
 }
 
@@ -122,6 +126,10 @@ function limparDadosDaEmpresa() {
     porId('banco-versao').textContent = '';
     porId('banco-tamanho').textContent = '';
     porId('ponto-paginacao').textContent = '';
+    estado.pontosPagina = 1;
+    estado.pontosPaginas = 0;
+    porId('ponto-anterior').disabled = true;
+    porId('ponto-proximo').disabled = true;
 }
 
 function sair(texto) {
@@ -130,12 +138,14 @@ function sair(texto) {
     estado.empresas = [];
     estado.selecionada = null;
     estado.pontosPagina = 1;
+    estado.pontosPaginas = 0;
 
     mostrar(porId('bloco-painel'), false);
     mostrar(porId('botao-sair'), false);
     mostrar(porId('bloco-login'), true);
     mostrar(porId('bloco-empresa'), false);
     porId('seletor-empresa').textContent = '';
+    porId('lista-empresas').textContent = '';
     limparDadosDaEmpresa();
     mensagem('mensagem-login', texto || '', texto ? 'erro' : '');
 
@@ -260,7 +270,7 @@ async function carregarResumo() {
     if (!empresa) return;
 
     try {
-        const resumo = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/resumo`);
+        const resumo = (await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/resumo`)) ?? {};
         if (!aindaSelecionada(empresa.codigo)) return;
 
         porId('resumo-funcionarios').textContent = String(resumo.funcionarios ?? 0);
@@ -279,7 +289,7 @@ async function carregarCoordenadores() {
     if (!empresa) return;
 
     try {
-        const lista = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/coordenadores`);
+        const lista = (await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/coordenadores`)) ?? [];
         if (!aindaSelecionada(empresa.codigo)) return;
 
         const corpo = porId('tabela-coordenadores');
@@ -330,7 +340,7 @@ async function carregarFuncionarios() {
     if (!empresa) return;
 
     try {
-        const lista = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/funcionarios`);
+        const lista = (await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/funcionarios`)) ?? [];
         if (!aindaSelecionada(empresa.codigo)) return;
 
         const corpo = porId('tabela-funcionarios');
@@ -373,18 +383,24 @@ async function carregarPontos(pagina = 1) {
     parametros.set('pagina', String(pagina));
 
     try {
-        const dados = await api(
-            `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/pontos?${parametros}`
-        );
+        const dados =
+            (await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/pontos?${parametros}`)) ?? {};
         if (!aindaSelecionada(empresa.codigo)) return;
 
-        estado.pontosPagina = dados.pagina;
+        const pontos = Array.isArray(dados.pontos) ? dados.pontos : [];
+        const paginas = Number(dados.paginas) || 0;
+        const paginaAtual = Number(dados.pagina) || 1;
+        const total = Number(dados.total) || 0;
+
+        estado.pontosPagina = paginaAtual;
+        estado.pontosPaginas = paginas;
+
         const corpo = porId('tabela-pontos');
         corpo.textContent = '';
-        if (dados.pontos.length === 0) {
+        if (pontos.length === 0) {
             linhaVazia(corpo, 3, 'Nenhum ponto no filtro.');
         } else {
-            for (const ponto of dados.pontos) {
+            for (const ponto of pontos) {
                 const linha = document.createElement('tr');
                 linha.append(
                     celulaTexto(ponto.funcionarioNome),
@@ -395,11 +411,12 @@ async function carregarPontos(pagina = 1) {
             }
         }
 
-        const total = Number(dados.total);
         porId('ponto-paginacao').textContent =
-            dados.paginas === 0
+            paginas === 0
                 ? 'Nenhum ponto encontrado.'
-                : `Página ${dados.pagina} de ${dados.paginas}, ${total === 1 ? '1 ponto' : `${total} pontos`}.`;
+                : `Página ${paginaAtual} de ${paginas}, ${total === 1 ? '1 ponto' : `${total} pontos`}.`;
+        porId('ponto-anterior').disabled = paginaAtual <= 1;
+        porId('ponto-proximo').disabled = paginas === 0 || paginaAtual >= paginas;
     } catch (erro) {
         if (!aindaSelecionada(empresa.codigo)) return;
         mensagem('mensagem-empresa', erro.message);
@@ -419,19 +436,21 @@ async function carregarSolicitacoes() {
     const status = porId('solicitacao-status').value || 'pendente';
 
     try {
-        const dados = await api(
-            `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/solicitacoes?status=${encodeURIComponent(status)}`
-        );
+        const dados =
+            (await api(
+                `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/solicitacoes?status=${encodeURIComponent(status)}`
+            )) ?? {};
         if (!aindaSelecionada(empresa.codigo)) return;
 
+        const solicitacoes = Array.isArray(dados.solicitacoes) ? dados.solicitacoes : [];
         const corpo = porId('tabela-solicitacoes');
         corpo.textContent = '';
-        if (dados.solicitacoes.length === 0) {
+        if (solicitacoes.length === 0) {
             linhaVazia(corpo, 5, VAZIO_POR_STATUS[status] ?? 'Nenhum pedido.');
             return;
         }
 
-        for (const solicitacao of dados.solicitacoes) {
+        for (const solicitacao of solicitacoes) {
             const linha = document.createElement('tr');
             linha.append(
                 celulaTexto(solicitacao.usuario),
@@ -453,10 +472,11 @@ async function carregarBanco() {
     if (!empresa) return;
 
     try {
-        const info = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/banco`);
+        const info = (await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/banco`)) ?? {};
         if (!aindaSelecionada(empresa.codigo)) return;
 
-        porId('banco-versao').textContent = String(info.versao);
+        porId('banco-versao').textContent =
+            info.versao === undefined || info.versao === null ? '' : String(info.versao);
         porId('banco-tamanho').textContent = formatarTamanho(info.tamanhoBytes);
     } catch (erro) {
         if (!aindaSelecionada(empresa.codigo)) return;
@@ -475,7 +495,8 @@ function atualizarNaLista(empresa) {
 
 async function carregarEmpresas() {
     try {
-        estado.empresas = await api('/api/admin/empresas');
+        const lista = (await api('/api/admin/empresas')) ?? [];
+        estado.empresas = Array.isArray(lista) ? lista : [];
         desenharEmpresas();
 
         const daUrl = new URL(window.location.href).searchParams.get('empresa');
@@ -607,6 +628,16 @@ porId('form-coordenador').addEventListener('submit', async (evento) => {
 porId('filtro-pontos').addEventListener('submit', (evento) => {
     evento.preventDefault();
     carregarPontos(1);
+});
+
+porId('ponto-anterior').addEventListener('click', () => {
+    if (estado.pontosPagina <= 1) return;
+    carregarPontos(estado.pontosPagina - 1);
+});
+
+porId('ponto-proximo').addEventListener('click', () => {
+    if (estado.pontosPaginas === 0 || estado.pontosPagina >= estado.pontosPaginas) return;
+    carregarPontos(estado.pontosPagina + 1);
 });
 
 porId('solicitacao-status').addEventListener('change', () => {
