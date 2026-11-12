@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,9 +8,24 @@ import { codigoEmpresa } from '../validacao.js';
 import { campoCsv, dataIso, inteiroPositivo } from './validacao-painel.js';
 
 const ASSINATURA_SQLITE = 'SQLite format 3\u0000';
+// Sem essas tabelas o arquivo não é banco de empresa, mesmo que seja um SQLite
+// válido com a versão de migração na faixa. Restaurar um banco alheio deixaria a
+// empresa sem funcionários, pontos e usuários.
+const TABELAS_DA_EMPRESA = ['usuarios', 'funcionarios', 'pontos'];
 // Limite do CSV de pontos: acima disso a planilha fica pesada demais para o
 // painel e o certo é filtrar por funcionário ou período.
 const LIMITE_CSV_PONTOS = 10000;
+
+function temTabelasDaEmpresa(banco) {
+    const nomes = new Set(
+        banco
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .all()
+            .map((linha) => linha.name)
+    );
+    return TABELAS_DA_EMPRESA.every((tabela) => nomes.has(tabela));
+}
+
 
 // Exportação e importação do banco de uma empresa pelo painel.
 //
@@ -70,8 +85,15 @@ export function criarExportacoesAdmin({ gerenciador }) {
         // Lido antes de abrir, porque abrir pode criar o arquivo quando falta.
         const tinhaAnterior = existsSync(destino);
 
-        const aberta = gerenciador.abrir(codigo, { permitirDesativada: true });
-        if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
+        // Banco atual ilegível não pode impedir a restauração: é justamente o
+        // caso em que o painel precisa funcionar para consertar a empresa.
+        let aberta = null;
+        try {
+            aberta = gerenciador.abrir(codigo, { permitirDesativada: true });
+        } catch {
+            aberta = null;
+        }
+        if (aberta?.erro) return res.status(aberta.status).json({ erro: aberta.erro });
 
         const carimbo = Date.now();
         const candidato = `${destino}.restaurando-${carimbo}`;
@@ -79,15 +101,15 @@ export function criarExportacoesAdmin({ gerenciador }) {
 
         // O candidato é escrito ao lado do banco de propósito: assim o rename
         // final é atômico e funciona mesmo com /tmp em outro sistema de arquivos.
-        let versao = 0;
         try {
             writeFileSync(candidato, bytes);
             const teste = new DatabaseSync(candidato, { readOnly: true });
             try {
                 const integridade = teste.prepare('PRAGMA integrity_check').get();
-                versao = Number(teste.prepare('PRAGMA user_version').get().user_version);
+                const versao = Number(teste.prepare('PRAGMA user_version').get().user_version);
                 if (integridade.integrity_check !== 'ok') throw new Error('integridade');
                 if (versao < 1 || versao > MIGRACOES.length) throw new Error('versão');
+                if (!temTabelasDaEmpresa(teste)) throw new Error('tabelas');
             } finally {
                 teste.close();
             }
@@ -99,7 +121,12 @@ export function criarExportacoesAdmin({ gerenciador }) {
         try {
             // Cópia do banco atual pelo próprio SQLite, ainda com a conexão
             // aberta: é a garantia de que o arquivo guardado está consistente.
-            if (tinhaAnterior) aberta.banco.db.prepare('VACUUM INTO ?').run(anterior);
+            // Com o banco atual ilegível não há VACUUM possível, então a cópia
+            // é crua mesmo, só para não perder o arquivo.
+            if (tinhaAnterior) {
+                if (aberta) aberta.banco.db.prepare('VACUUM INTO ?').run(anterior);
+                else copyFileSync(destino, anterior);
+            }
         } catch {
             rmSync(candidato, { force: true });
             return res.status(500).json({ erro: 'Não foi possível guardar o banco atual. Nada foi alterado' });
@@ -131,13 +158,41 @@ export function criarExportacoesAdmin({ gerenciador }) {
         try {
             reaberta = gerenciador.abrir(codigo, { permitirDesativada: true });
         } catch {
-            return res.status(500).json({ erro: 'Banco restaurado, mas não foi possível reabrir' });
+            reaberta = null;
         }
-        if (reaberta.erro) {
-            return res.status(500).json({ erro: 'Banco restaurado, mas não foi possível reabrir' });
+        if (reaberta?.erro) reaberta = null;
+        if (reaberta) return res.json({ sucesso: true, versao: reaberta.banco.userVersion() });
+
+        // O arquivo novo já ocupou o lugar, mas não abriu. Aqui o anterior volta
+        // a ser o banco da empresa, senão ela ficaria inutilizável e sem caminho
+        // de conserto pelo próprio painel.
+        const devolvido = tinhaAnterior && existsSync(anterior);
+        if (devolvido) {
+            try {
+                rmSync(`${destino}-wal`, { force: true });
+                rmSync(`${destino}-shm`, { force: true });
+                renameSync(anterior, destino);
+            } catch {
+                return res.status(500).json({
+                    erro: `O banco novo não abriu e o anterior não pôde ser devolvido. Ele está guardado em ${anterior}`,
+                });
+            }
+        } else {
+            rmSync(destino, { force: true });
+            rmSync(`${destino}-wal`, { force: true });
+            rmSync(`${destino}-shm`, { force: true });
         }
 
-        res.json({ sucesso: true, versao: reaberta.banco.userVersion() });
+        try {
+            gerenciador.abrir(codigo, { permitirDesativada: true });
+        } catch {
+            // o arquivo anterior já está no lugar, mesmo que não abra
+        }
+        return res.status(500).json({
+            erro: devolvido
+                ? 'O banco novo não abriu. O anterior foi devolvido'
+                : 'O banco novo não abriu e a empresa ficou sem banco',
+        });
     }
 
     // O Excel em português espera ponto e vírgula, BOM para acertar o acento e

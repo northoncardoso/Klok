@@ -1,8 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    readdirSync,
+    rmSync,
+    unlinkSync,
+    writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { criarBanco } from '../db.js';
 import { iniciarApp, logarAdmin } from './helpers.js';
@@ -143,4 +152,63 @@ test('falha na troca do arquivo mantém o banco anterior no lugar', async (t) =>
     // Zero funcionário prova que o arquivo em disco é o anterior, não o backup.
     assert.equal(depois.listarFuncionarios().length, 0);
     assert.equal(depois.listarTodosPontos().length, 0);
+});
+
+test('recusa SQLite válido que não é banco de empresa', async (t) => {
+    const { s, cabecalhos } = await preparar(t);
+    const funcionarioId = s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
+    assert.equal(s.banco.listarFuncionarios().length, 1);
+
+    // Um SQLite legítimo, com a versão de migração na faixa esperada, mas sem
+    // as tabelas da empresa. Sem a conferência de tabelas isso passaria e a
+    // empresa ficaria com um banco alheio no lugar do dela.
+    const alheio = join(mkdtempSync(join(tmpdir(), 'klok-alheio-')), 'alheio.db');
+    const outro = new DatabaseSync(alheio);
+    outro.exec('PRAGMA user_version = 8');
+    outro.exec('CREATE TABLE outra_coisa (id INTEGER)');
+    outro.close();
+
+    const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco/restaurar`, {
+        method: 'POST',
+        headers: {
+            ...cabecalhos,
+            'content-type': 'application/octet-stream',
+            'x-confirmar-codigo': 'TESTE',
+        },
+        body: readFileSync(alheio),
+    });
+    assert.equal(resp.status, 400);
+    assert.match((await resp.json()).erro, /versão desconhecida/);
+
+    // O banco da empresa continua o mesmo, com a Ana no lugar.
+    const aberto = s.gerenciador.abrir('TESTE');
+    assert.equal(aberto.banco.listarFuncionarios().length, 1);
+    assert.equal(aberto.banco.buscarFuncionario(funcionarioId).nome, 'Ana');
+});
+
+test('restaura sobre banco ilegível e devolve a empresa ao ar', async (t) => {
+    const { s, cabecalhos } = await preparar(t);
+    const funcionarioId = s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
+    const backup = Buffer.from(
+        await (await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco/backup`, { headers: cabecalhos })).arrayBuffer()
+    );
+    s.banco.apagarFuncionario(funcionarioId);
+
+    // Empresa com o arquivo corrompido no disco: abrir estoura e nem o resumo
+    // responde. A restauração é o caminho de conserto, então precisa passar.
+    const caminho = s.gerenciador.caminhoDe('TESTE');
+    s.gerenciador.fecharBanco('TESTE');
+    writeFileSync(caminho, 'SQLite format 3\u0000 mas o resto é lixo');
+
+    const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco/restaurar`, {
+        method: 'POST',
+        headers: {
+            ...cabecalhos,
+            'content-type': 'application/octet-stream',
+            'x-confirmar-codigo': 'TESTE',
+        },
+        body: backup,
+    });
+    assert.equal(resp.status, 200);
+    assert.equal(s.gerenciador.abrir('TESTE').banco.listarFuncionarios().length, 1);
 });

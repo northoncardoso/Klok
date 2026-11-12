@@ -371,6 +371,7 @@ test('rotas novas exigem token de admin', async (t) => {
         '/api/admin/empresas/TESTE/pontos.csv',
         '/api/admin/empresas/TESTE/solicitacoes',
         '/api/admin/empresas/TESTE/banco',
+        '/api/admin/empresas/TESTE/banco/backup',
     ];
     for (const rota of rotas) {
         assert.equal((await fetch(`${s.baseUrl}${rota}`)).status, 401, rota);
