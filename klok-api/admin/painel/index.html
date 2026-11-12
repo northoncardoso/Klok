@@ -76,6 +76,11 @@
                     <p id="mensagem-empresas" class="mensagem" role="alert"></p>
                 </div>
 
+                <div class="cartao">
+                    <label for="seletor-empresa">Empresa em atendimento</label>
+                    <select id="seletor-empresa"></select>
+                </div>
+
                 <div id="bloco-empresa" class="cartao" hidden>
                     <h2 id="empresa-titulo"></h2>
                     <p class="dica">Código: <strong id="empresa-codigo-atual"></strong></p>
@@ -88,6 +93,100 @@
                     </form>
 
                     <button id="botao-status" class="secundario" type="button"></button>
+
+                    <h3>Resumo</h3>
+                    <div class="numeros">
+                        <div><strong id="resumo-funcionarios">0</strong><span>funcionários</span></div>
+                        <div><strong id="resumo-coordenadores">0</strong><span>coordenadores</span></div>
+                        <div><strong id="resumo-pontos">0</strong><span>pontos</span></div>
+                        <div><strong id="resumo-pendentes">0</strong><span>pedidos pendentes</span></div>
+                    </div>
+                    <p class="dica">Último ponto: <strong id="resumo-ultimo-ponto">nenhum</strong></p>
+
+                    <h3>Coordenadores</h3>
+                    <div class="tabela-rolagem">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Usuário</th>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-coordenadores"></tbody>
+                        </table>
+                    </div>
+
+                    <h3>Funcionários</h3>
+                    <div class="tabela-rolagem">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Número</th>
+                                    <th>Email</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-funcionarios"></tbody>
+                        </table>
+                    </div>
+
+                    <h3>Pontos</h3>
+                    <form id="filtro-pontos" class="formulario">
+                        <label for="ponto-funcionario">Funcionário</label>
+                        <select id="ponto-funcionario">
+                            <option value="">Todos</option>
+                        </select>
+                        <label for="ponto-de">De</label>
+                        <input id="ponto-de" type="date" />
+                        <label for="ponto-ate">Até</label>
+                        <input id="ponto-ate" type="date" />
+                        <label for="ponto-limite">Limite</label>
+                        <input id="ponto-limite" type="number" min="1" max="200" value="200" />
+                        <button type="submit">Filtrar</button>
+                    </form>
+                    <p id="ponto-paginacao" class="dica"></p>
+                    <div class="tabela-rolagem">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Funcionário</th>
+                                    <th>Quando</th>
+                                    <th>Tipo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-pontos"></tbody>
+                        </table>
+                    </div>
+
+                    <h3>Solicitações</h3>
+                    <select id="solicitacao-status">
+                        <option value="pendente">Pendentes</option>
+                        <option value="aprovado">Aprovadas</option>
+                        <option value="recusado">Recusadas</option>
+                    </select>
+                    <div class="tabela-rolagem">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Usuário</th>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Criado em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-solicitacoes"></tbody>
+                        </table>
+                    </div>
+
+                    <h3>Banco</h3>
+                    <p class="dica">
+                        Versão: <strong id="banco-versao"></strong> · Tamanho:
+                        <strong id="banco-tamanho"></strong>
+                    </p>
 
                     <h3>Primeiro coordenador</h3>
                     <p class="dica">

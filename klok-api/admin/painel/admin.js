@@ -1,10 +1,23 @@
-const CHAVE_TOKEN = 'klok_admin_token';
+// Painel de suporte da KLOK. A sessão é por cookie HttpOnly (klok_admin) mais o
+// cookie legível klok_csrf, então nenhum token fica guardado no navegador nem
+// aparece no HTML. O valor do klok_csrf vai em x-csrf-token em toda chamada,
+// inclusive GET, porque o CSRF vale para qualquer requisição autenticada por
+// cookie.
 
 const estado = {
-    token: sessionStorage.getItem(CHAVE_TOKEN) || '',
     empresas: [],
     selecionada: null,
+    csrf: '',
+    pontosPagina: 1,
 };
+
+const FORMATO_DATA_HORA = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    dateStyle: 'short',
+    timeStyle: 'short',
+});
+
+const FORMATO_NUMERO = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
 function porId(id) {
     return document.getElementById(id);
@@ -20,15 +33,37 @@ function mensagem(id, texto, tipo = 'erro') {
     alvo.dataset.tipo = tipo;
 }
 
-// O token fica em sessionStorage de propósito: é o painel interno da KLOK e a
-// sessão morre ao fechar a aba. Cookie httpOnly com CSRF seria mais forte, e é
-// o próximo passo se o painel crescer.
+function csrfDoCookie() {
+    const par = document.cookie.split('; ').find((item) => item.startsWith('klok_csrf='));
+    return par ? par.slice('klok_csrf='.length) : '';
+}
+
+function formatarDataHora(valor) {
+    if (!valor) return 'nenhum';
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return String(valor);
+    return FORMATO_DATA_HORA.format(data);
+}
+
+function formatarTamanho(bytes) {
+    if (!Number.isFinite(bytes)) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${FORMATO_NUMERO.format(kb)} KB`;
+    return `${FORMATO_NUMERO.format(kb / 1024)} MB`;
+}
+
+// Download de CSV e de backup não pode ser link direto: o CSRF vale também no
+// GET, então o arquivo precisa sair por fetch com credentials, o header
+// x-csrf-token e a resposta virada em blob com link temporário. As ações de
+// download entram na Task 14.
 async function api(caminho, { method = 'GET', corpo } = {}) {
     const resp = await fetch(caminho, {
         method,
+        credentials: 'same-origin',
         headers: {
             ...(corpo === undefined ? {} : { 'content-type': 'application/json' }),
-            ...(estado.token ? { authorization: `Bearer ${estado.token}` } : {}),
+            ...(estado.csrf ? { 'x-csrf-token': estado.csrf } : {}),
         },
         body: corpo === undefined ? undefined : JSON.stringify(corpo),
     });
@@ -41,8 +76,11 @@ async function api(caminho, { method = 'GET', corpo } = {}) {
     }
 
     if (resp.status === 401 && caminho !== '/api/admin/login') {
-        sair('Sessão expirada, entre de novo.');
-        throw new Error('Sessão expirada, entre de novo.');
+        const expirada = 'Sessão expirada, entre de novo.';
+        // O cookie de CSRF sobrevive ao recarregar a página. Se ele existe mas a
+        // sessão já morreu, o estado local cai e o login volta.
+        if (estado.csrf) sair(expirada);
+        throw new Error(expirada);
     }
     if (!resp.ok) {
         throw new Error(dados?.erro || 'Falha na requisição');
@@ -50,16 +88,67 @@ async function api(caminho, { method = 'GET', corpo } = {}) {
     return dados;
 }
 
+function celulaTexto(valor) {
+    const celula = document.createElement('td');
+    celula.textContent = valor === null || valor === undefined ? '' : String(valor);
+    return celula;
+}
+
+function celulaAcoes() {
+    // As ações de cada linha entram na Task 14.
+    return document.createElement('td');
+}
+
+function linhaVazia(corpo, colunas, texto) {
+    const linha = document.createElement('tr');
+    const celula = document.createElement('td');
+    celula.colSpan = colunas;
+    celula.textContent = texto;
+    linha.append(celula);
+    corpo.append(linha);
+}
+
+function limparDadosDaEmpresa() {
+    for (const id of ['tabela-coordenadores', 'tabela-funcionarios', 'tabela-pontos', 'tabela-solicitacoes']) {
+        porId(id).textContent = '';
+    }
+    // Zerar o filtro de funcionário evita mandar id de uma empresa para a outra.
+    desenharSeletorFuncionarios([]);
+    porId('resumo-funcionarios').textContent = '0';
+    porId('resumo-coordenadores').textContent = '0';
+    porId('resumo-pontos').textContent = '0';
+    porId('resumo-pendentes').textContent = '0';
+    porId('resumo-ultimo-ponto').textContent = 'nenhum';
+    porId('banco-versao').textContent = '';
+    porId('banco-tamanho').textContent = '';
+    porId('ponto-paginacao').textContent = '';
+}
+
 function sair(texto) {
-    estado.token = '';
+    const csrf = estado.csrf;
+    estado.csrf = '';
     estado.empresas = [];
     estado.selecionada = null;
-    sessionStorage.removeItem(CHAVE_TOKEN);
+    estado.pontosPagina = 1;
+
     mostrar(porId('bloco-painel'), false);
     mostrar(porId('botao-sair'), false);
     mostrar(porId('bloco-login'), true);
     mostrar(porId('bloco-empresa'), false);
+    porId('seletor-empresa').textContent = '';
+    limparDadosDaEmpresa();
     mensagem('mensagem-login', texto || '', texto ? 'erro' : '');
+
+    // Logout direto no fetch, sem passar por api(): com sessão já expirada ele
+    // responde 401 e api() chamaria sair() de novo em laço. A falha é ignorada
+    // de propósito, o estado local já foi limpo. Sem cookie de CSRF não existe
+    // sessão para encerrar, então nem chama a rota.
+    if (!csrf) return;
+    fetch('/api/admin/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'x-csrf-token': csrf },
+    }).catch(() => {});
 }
 
 function entrarNoPainel() {
@@ -71,17 +160,32 @@ function entrarNoPainel() {
     carregarEmpresas();
 }
 
+function desenharSeletorEmpresas() {
+    const seletor = porId('seletor-empresa');
+    seletor.textContent = '';
+
+    const vazia = document.createElement('option');
+    vazia.value = '';
+    vazia.textContent = estado.empresas.length === 0 ? 'Nenhuma empresa' : 'Escolha uma empresa';
+    seletor.append(vazia);
+
+    for (const empresa of estado.empresas) {
+        const opcao = document.createElement('option');
+        opcao.value = empresa.codigo;
+        opcao.textContent = `${empresa.codigo}: ${empresa.nome}`;
+        seletor.append(opcao);
+    }
+
+    seletor.value = estado.selecionada ? estado.selecionada.codigo : '';
+}
+
 function desenharEmpresas() {
     const corpo = porId('lista-empresas');
     corpo.textContent = '';
 
     if (estado.empresas.length === 0) {
-        const linha = document.createElement('tr');
-        const celula = document.createElement('td');
-        celula.colSpan = 4;
-        celula.textContent = 'Nenhuma empresa ainda.';
-        linha.append(celula);
-        corpo.append(linha);
+        linhaVazia(corpo, 4, 'Nenhuma empresa ainda.');
+        desenharSeletorEmpresas();
         return;
     }
 
@@ -108,10 +212,16 @@ function desenharEmpresas() {
         linha.append(codigo, nome, status, acoes);
         corpo.append(linha);
     }
+
+    desenharSeletorEmpresas();
 }
 
 function empresaPorCodigo(codigo) {
     return estado.empresas.find((empresa) => empresa.codigo === codigo) || null;
+}
+
+function aindaSelecionada(codigo) {
+    return estado.selecionada !== null && estado.selecionada.codigo === codigo;
 }
 
 function selecionarEmpresa(codigo) {
@@ -119,6 +229,9 @@ function selecionarEmpresa(codigo) {
     if (!empresa) return;
 
     estado.selecionada = empresa;
+    estado.pontosPagina = 1;
+    limparDadosDaEmpresa();
+
     porId('empresa-titulo').textContent = empresa.nome;
     porId('empresa-codigo-atual').textContent = empresa.codigo;
     porId('empresa-status').textContent = empresa.desativadaEm ? 'Desativada' : 'Ativa';
@@ -126,11 +239,229 @@ function selecionarEmpresa(codigo) {
     porId('botao-status').textContent = empresa.desativadaEm ? 'Ativar empresa' : 'Desativar empresa';
     mensagem('mensagem-empresa', '');
 
+    porId('seletor-empresa').value = empresa.codigo;
+
     const url = new URL(window.location.href);
     url.searchParams.set('empresa', empresa.codigo);
     window.history.replaceState(null, '', url);
 
     mostrar(porId('bloco-empresa'), true);
+
+    carregarResumo();
+    carregarCoordenadores();
+    carregarFuncionarios();
+    carregarPontos(1);
+    carregarSolicitacoes();
+    carregarBanco();
+}
+
+async function carregarResumo() {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    try {
+        const resumo = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/resumo`);
+        if (!aindaSelecionada(empresa.codigo)) return;
+
+        porId('resumo-funcionarios').textContent = String(resumo.funcionarios ?? 0);
+        porId('resumo-coordenadores').textContent = String(resumo.coordenadores ?? 0);
+        porId('resumo-pontos').textContent = String(resumo.pontos ?? 0);
+        porId('resumo-pendentes').textContent = String(resumo.solicitacoesPendentes ?? 0);
+        porId('resumo-ultimo-ponto').textContent = formatarDataHora(resumo.ultimoPonto);
+    } catch (erro) {
+        if (!aindaSelecionada(empresa.codigo)) return;
+        mensagem('mensagem-empresa', erro.message);
+    }
+}
+
+async function carregarCoordenadores() {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    try {
+        const lista = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/coordenadores`);
+        if (!aindaSelecionada(empresa.codigo)) return;
+
+        const corpo = porId('tabela-coordenadores');
+        corpo.textContent = '';
+        if (lista.length === 0) {
+            linhaVazia(corpo, 4, 'Nenhum coordenador cadastrado.');
+            return;
+        }
+
+        for (const coordenador of lista) {
+            const linha = document.createElement('tr');
+            linha.append(
+                celulaTexto(coordenador.usuario),
+                celulaTexto(coordenador.nome),
+                celulaTexto(coordenador.email),
+                celulaAcoes()
+            );
+            corpo.append(linha);
+        }
+    } catch (erro) {
+        if (!aindaSelecionada(empresa.codigo)) return;
+        mensagem('mensagem-empresa', erro.message);
+    }
+}
+
+function desenharSeletorFuncionarios(lista) {
+    const seletor = porId('ponto-funcionario');
+    const atual = seletor.value;
+    seletor.textContent = '';
+
+    const todos = document.createElement('option');
+    todos.value = '';
+    todos.textContent = 'Todos';
+    seletor.append(todos);
+
+    for (const funcionario of lista) {
+        const opcao = document.createElement('option');
+        opcao.value = String(funcionario.id);
+        opcao.textContent = funcionario.nome;
+        seletor.append(opcao);
+    }
+
+    seletor.value = lista.some((funcionario) => String(funcionario.id) === atual) ? atual : '';
+}
+
+async function carregarFuncionarios() {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    try {
+        const lista = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/funcionarios`);
+        if (!aindaSelecionada(empresa.codigo)) return;
+
+        const corpo = porId('tabela-funcionarios');
+        corpo.textContent = '';
+        if (lista.length === 0) {
+            linhaVazia(corpo, 4, 'Nenhum funcionário cadastrado.');
+        } else {
+            for (const funcionario of lista) {
+                const linha = document.createElement('tr');
+                linha.append(
+                    celulaTexto(funcionario.nome),
+                    celulaTexto(funcionario.numero),
+                    celulaTexto(funcionario.email),
+                    celulaAcoes()
+                );
+                corpo.append(linha);
+            }
+        }
+
+        desenharSeletorFuncionarios(lista);
+    } catch (erro) {
+        if (!aindaSelecionada(empresa.codigo)) return;
+        mensagem('mensagem-empresa', erro.message);
+    }
+}
+
+async function carregarPontos(pagina = 1) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const parametros = new URLSearchParams();
+    const funcionarioId = porId('ponto-funcionario').value;
+    if (funcionarioId) parametros.set('funcionarioId', funcionarioId);
+    const de = porId('ponto-de').value;
+    if (de) parametros.set('de', de);
+    const ate = porId('ponto-ate').value;
+    if (ate) parametros.set('ate', ate);
+    const limite = porId('ponto-limite').value;
+    if (limite) parametros.set('limite', limite);
+    parametros.set('pagina', String(pagina));
+
+    try {
+        const dados = await api(
+            `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/pontos?${parametros}`
+        );
+        if (!aindaSelecionada(empresa.codigo)) return;
+
+        estado.pontosPagina = dados.pagina;
+        const corpo = porId('tabela-pontos');
+        corpo.textContent = '';
+        if (dados.pontos.length === 0) {
+            linhaVazia(corpo, 3, 'Nenhum ponto no filtro.');
+        } else {
+            for (const ponto of dados.pontos) {
+                const linha = document.createElement('tr');
+                linha.append(
+                    celulaTexto(ponto.funcionarioNome),
+                    celulaTexto(formatarDataHora(ponto.dataHora)),
+                    celulaTexto(ponto.tipo)
+                );
+                corpo.append(linha);
+            }
+        }
+
+        const total = Number(dados.total);
+        porId('ponto-paginacao').textContent =
+            dados.paginas === 0
+                ? 'Nenhum ponto encontrado.'
+                : `Página ${dados.pagina} de ${dados.paginas}, ${total === 1 ? '1 ponto' : `${total} pontos`}.`;
+    } catch (erro) {
+        if (!aindaSelecionada(empresa.codigo)) return;
+        mensagem('mensagem-empresa', erro.message);
+    }
+}
+
+const VAZIO_POR_STATUS = {
+    pendente: 'Nenhum pedido pendente.',
+    aprovado: 'Nenhum pedido aprovado.',
+    recusado: 'Nenhum pedido recusado.',
+};
+
+async function carregarSolicitacoes() {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const status = porId('solicitacao-status').value || 'pendente';
+
+    try {
+        const dados = await api(
+            `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/solicitacoes?status=${encodeURIComponent(status)}`
+        );
+        if (!aindaSelecionada(empresa.codigo)) return;
+
+        const corpo = porId('tabela-solicitacoes');
+        corpo.textContent = '';
+        if (dados.solicitacoes.length === 0) {
+            linhaVazia(corpo, 5, VAZIO_POR_STATUS[status] ?? 'Nenhum pedido.');
+            return;
+        }
+
+        for (const solicitacao of dados.solicitacoes) {
+            const linha = document.createElement('tr');
+            linha.append(
+                celulaTexto(solicitacao.usuario),
+                celulaTexto(solicitacao.nome),
+                celulaTexto(solicitacao.email),
+                celulaTexto(formatarDataHora(solicitacao.criadoEm)),
+                celulaAcoes()
+            );
+            corpo.append(linha);
+        }
+    } catch (erro) {
+        if (!aindaSelecionada(empresa.codigo)) return;
+        mensagem('mensagem-empresa', erro.message);
+    }
+}
+
+async function carregarBanco() {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    try {
+        const info = await api(`/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/banco`);
+        if (!aindaSelecionada(empresa.codigo)) return;
+
+        porId('banco-versao').textContent = String(info.versao);
+        porId('banco-tamanho').textContent = formatarTamanho(info.tamanhoBytes);
+    } catch (erro) {
+        if (!aindaSelecionada(empresa.codigo)) return;
+        mensagem('mensagem-empresa', erro.message);
+    }
 }
 
 function atualizarNaLista(empresa) {
@@ -159,15 +490,14 @@ porId('form-login').addEventListener('submit', async (evento) => {
     mensagem('mensagem-login', '');
 
     try {
-        const dados = await api('/api/admin/login', {
+        await api('/api/admin/login', {
             method: 'POST',
             corpo: {
                 usuario: porId('login-usuario').value,
                 senha: porId('login-senha').value,
             },
         });
-        estado.token = dados.token;
-        sessionStorage.setItem(CHAVE_TOKEN, dados.token);
+        estado.csrf = csrfDoCookie();
         porId('login-usuario').value = '';
         entrarNoPainel();
     } catch (erro) {
@@ -201,6 +531,15 @@ porId('lista-empresas').addEventListener('click', (evento) => {
     const botao = evento.target.closest('button[data-codigo]');
     if (!botao) return;
     selecionarEmpresa(botao.dataset.codigo);
+});
+
+porId('seletor-empresa').addEventListener('change', (evento) => {
+    const codigo = evento.target.value;
+    if (codigo) {
+        selecionarEmpresa(codigo);
+    } else if (estado.selecionada) {
+        evento.target.value = estado.selecionada.codigo;
+    }
 });
 
 porId('form-renomear').addEventListener('submit', async (evento) => {
@@ -258,12 +597,26 @@ porId('form-coordenador').addEventListener('submit', async (evento) => {
             `Coordenador ${criado.usuario} criado. Ele já entra com o código ${criado.empresa}.`,
             'ok'
         );
+        carregarCoordenadores();
+        carregarResumo();
     } catch (erro) {
         mensagem('mensagem-empresa', erro.message);
     }
 });
 
-if (estado.token) {
+porId('filtro-pontos').addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    carregarPontos(1);
+});
+
+porId('solicitacao-status').addEventListener('change', () => {
+    carregarSolicitacoes();
+});
+
+// O cookie de CSRF sobrevive ao recarregar a página: se ele existe, tentamos
+// abrir o painel direto e o primeiro 401 devolve o login.
+estado.csrf = csrfDoCookie();
+if (estado.csrf) {
     entrarNoPainel();
 } else {
     sair('');

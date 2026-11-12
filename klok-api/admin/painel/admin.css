@@ -69,6 +69,38 @@ main {
     font-size: 0.9rem;
 }
 
+.numeros {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin: 0.75rem 0;
+}
+
+.numeros > div {
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--fundo);
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+}
+
+.numeros strong {
+    font-size: 1.35rem;
+    line-height: 1.2;
+}
+
+.numeros span {
+    color: var(--suave);
+    font-size: 0.85rem;
+}
+
+@media (max-width: 560px) {
+    .numeros {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 .formulario {
     display: grid;
     gap: 0.35rem;
@@ -80,7 +112,8 @@ main {
     font-weight: 600;
 }
 
-input {
+input,
+select {
     width: 100%;
     padding: 0.5rem 0.65rem;
     border: 1px solid var(--borda);
@@ -90,7 +123,8 @@ input {
     color: inherit;
 }
 
-input:focus {
+input:focus,
+select:focus {
     outline: 2px solid var(--acento);
     outline-offset: 1px;
 }

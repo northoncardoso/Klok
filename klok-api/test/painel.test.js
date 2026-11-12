@@ -24,3 +24,25 @@ test('painel não deixa o token aparecer no HTML', async (t) => {
     const html = await (await fetch(`${s.baseUrl}/admin`)).text();
     assert.doesNotMatch(html, /Bearer|token\s*[:=]/i);
 });
+
+test('painel tem as seções de suporte', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const html = await (await fetch(`${s.baseUrl}/admin`)).text();
+    for (const id of [
+        'seletor-empresa',
+        'resumo-funcionarios',
+        'resumo-coordenadores',
+        'resumo-pontos',
+        'resumo-pendentes',
+        'resumo-ultimo-ponto',
+        'tabela-coordenadores',
+        'tabela-funcionarios',
+        'tabela-pontos',
+        'tabela-solicitacoes',
+        'banco-versao',
+        'banco-tamanho',
+    ]) {
+        assert.match(html, new RegExp(`id="${id}"`));
+    }
+});
