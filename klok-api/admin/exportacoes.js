@@ -1,0 +1,262 @@
+import { DatabaseSync } from 'node:sqlite';
+import { copyFileSync, existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { MIGRACOES } from '../db.js';
+import { codigoEmpresa } from '../validacao.js';
+import { campoCsv, dataIso, inteiroPositivo } from './validacao-painel.js';
+
+const ASSINATURA_SQLITE = 'SQLite format 3\u0000';
+// Sem essas tabelas o arquivo não é banco de empresa, mesmo que seja um SQLite
+// válido com a versão de migração na faixa. Restaurar um banco alheio deixaria a
+// empresa sem funcionários, pontos e usuários.
+const TABELAS_DA_EMPRESA = ['usuarios', 'funcionarios', 'pontos'];
+// Limite do CSV de pontos: acima disso a planilha fica pesada demais para o
+// painel e o certo é filtrar por funcionário ou período.
+const LIMITE_CSV_PONTOS = 10000;
+
+function temTabelasDaEmpresa(banco) {
+    const nomes = new Set(
+        banco
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .all()
+            .map((linha) => linha.name)
+    );
+    return TABELAS_DA_EMPRESA.every((tabela) => nomes.has(tabela));
+}
+
+
+// Exportação e importação do banco de uma empresa pelo painel.
+//
+// A restauração é o caminho mais arriscado do painel: o arquivo atual nunca é
+// removido antes de o substituto estar validado e pronto no mesmo diretório.
+// Assim a empresa nunca fica sem banco, mesmo se algo falhar no meio.
+export function criarExportacoesAdmin({ gerenciador }) {
+    function abrirParaAdmin(codigo) {
+        return gerenciador.abrir(codigoEmpresa(codigo), {
+            permitirDesativada: true,
+            criarSeFaltar: false,
+        });
+    }
+
+    function backup(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
+
+        const dir = mkdtempSync(join(tmpdir(), 'klok-backup-'));
+        const arquivo = join(dir, `${aberta.empresa.codigo}.db`);
+        try {
+            // VACUUM INTO gera uma cópia consistente e compactada mesmo com o
+            // banco aberto em WAL, sem depender de copiar o arquivo e o -wal.
+            aberta.banco.db.prepare('VACUUM INTO ?').run(arquivo);
+        } catch (erro) {
+            rmSync(dir, { recursive: true, force: true });
+            throw erro;
+        }
+
+        const nome = `klok-${aberta.empresa.codigo}-${new Date().toISOString().slice(0, 10)}.db`;
+        // O callback roda no fim do envio e também em erro. É o único ponto em
+        // que o diretório temporário pode ser apagado com segurança.
+        res.download(arquivo, nome, (erro) => {
+            rmSync(dir, { recursive: true, force: true });
+            if (!erro) return;
+            if (res.headersSent) return res.end();
+            res.status(500).json({ erro: 'Falha ao enviar o backup' });
+        });
+    }
+
+    function restaurarBackup(req, res) {
+        const codigo = codigoEmpresa(req.params.codigo);
+        // O header é a trava contra restauração por engano, então compara com o
+        // código normalizado. A autenticação de admin continua sendo a segurança.
+        const confirmacao = (req.get('x-confirmar-codigo') ?? '').trim().toUpperCase();
+        if (!codigo || confirmacao !== codigo) {
+            return res.status(400).json({ erro: 'Confirmação do código da empresa não confere' });
+        }
+
+        const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+        if (bytes.length < 100 || bytes.subarray(0, 16).toString('latin1') !== ASSINATURA_SQLITE) {
+            return res.status(400).json({ erro: 'O arquivo enviado não é um banco SQLite válido' });
+        }
+
+        const destino = gerenciador.caminhoDe(codigo);
+        if (!destino) return res.status(400).json({ erro: 'Código de empresa inválido' });
+        // Lido antes de abrir, porque abrir pode criar o arquivo quando falta.
+        const tinhaAnterior = existsSync(destino);
+
+        // Banco atual ilegível não pode impedir a restauração: é justamente o
+        // caso em que o painel precisa funcionar para consertar a empresa.
+        let aberta = null;
+        try {
+            aberta = gerenciador.abrir(codigo, { permitirDesativada: true });
+        } catch {
+            aberta = null;
+        }
+        if (aberta?.erro) return res.status(aberta.status).json({ erro: aberta.erro });
+
+        const carimbo = Date.now();
+        const candidato = `${destino}.restaurando-${carimbo}`;
+        const anterior = `${destino}.antes-de-restaurar-${carimbo}`;
+
+        // O candidato é escrito ao lado do banco de propósito: assim o rename
+        // final é atômico e funciona mesmo com /tmp em outro sistema de arquivos.
+        try {
+            writeFileSync(candidato, bytes);
+            const teste = new DatabaseSync(candidato, { readOnly: true });
+            try {
+                const integridade = teste.prepare('PRAGMA integrity_check').get();
+                const versao = Number(teste.prepare('PRAGMA user_version').get().user_version);
+                if (integridade.integrity_check !== 'ok') throw new Error('integridade');
+                if (versao < 1 || versao > MIGRACOES.length) throw new Error('versão');
+                if (!temTabelasDaEmpresa(teste)) throw new Error('tabelas');
+            } finally {
+                teste.close();
+            }
+        } catch {
+            rmSync(candidato, { force: true });
+            return res.status(400).json({ erro: 'Backup inválido ou de uma versão desconhecida' });
+        }
+
+        try {
+            // Cópia do banco atual pelo próprio SQLite, ainda com a conexão
+            // aberta: é a garantia de que o arquivo guardado está consistente.
+            // Com o banco atual ilegível não há VACUUM possível, então a cópia
+            // é crua mesmo, só para não perder o arquivo.
+            if (tinhaAnterior) {
+                if (aberta) aberta.banco.db.prepare('VACUUM INTO ?').run(anterior);
+                else copyFileSync(destino, anterior);
+            }
+        } catch {
+            rmSync(candidato, { force: true });
+            return res.status(500).json({ erro: 'Não foi possível guardar o banco atual. Nada foi alterado' });
+        }
+
+        gerenciador.fecharBanco(codigo);
+
+        try {
+            // Arquivos auxiliares do WAL pertenciam ao banco antigo: precisam
+            // sair antes de o novo arquivo ocupar o lugar.
+            rmSync(`${destino}-wal`, { force: true });
+            rmSync(`${destino}-shm`, { force: true });
+            // O rename substitui o arquivo de uma vez, então não existe janela
+            // em que a empresa fique sem banco.
+            renameSync(candidato, destino);
+        } catch {
+            rmSync(candidato, { force: true });
+            // O banco antigo continua no lugar. Reabre para o painel seguir;
+            // se a reabertura falhar, o arquivo em disco segue intacto.
+            try {
+                gerenciador.abrir(codigo, { permitirDesativada: true });
+            } catch {
+                // nada a fazer: o arquivo anterior está preservado no disco
+            }
+            return res.status(500).json({ erro: 'Falha ao trocar o banco. O anterior foi mantido' });
+        }
+
+        let reaberta;
+        try {
+            reaberta = gerenciador.abrir(codigo, { permitirDesativada: true });
+        } catch {
+            reaberta = null;
+        }
+        if (reaberta?.erro) reaberta = null;
+        if (reaberta) return res.json({ sucesso: true, versao: reaberta.banco.userVersion() });
+
+        // O arquivo novo já ocupou o lugar, mas não abriu. Aqui o anterior volta
+        // a ser o banco da empresa, senão ela ficaria inutilizável e sem caminho
+        // de conserto pelo próprio painel.
+        const devolvido = tinhaAnterior && existsSync(anterior);
+        if (devolvido) {
+            try {
+                rmSync(`${destino}-wal`, { force: true });
+                rmSync(`${destino}-shm`, { force: true });
+                renameSync(anterior, destino);
+            } catch {
+                return res.status(500).json({
+                    erro: `O banco novo não abriu e o anterior não pôde ser devolvido. Ele está guardado em ${anterior}`,
+                });
+            }
+        } else {
+            rmSync(destino, { force: true });
+            rmSync(`${destino}-wal`, { force: true });
+            rmSync(`${destino}-shm`, { force: true });
+        }
+
+        try {
+            gerenciador.abrir(codigo, { permitirDesativada: true });
+        } catch {
+            // o arquivo anterior já está no lugar, mesmo que não abra
+        }
+        return res.status(500).json({
+            erro: devolvido
+                ? 'O banco novo não abriu. O anterior foi devolvido'
+                : 'O banco novo não abriu e a empresa ficou sem banco',
+        });
+    }
+
+    // O Excel em português espera ponto e vírgula, BOM para acertar o acento e
+    // CRLF para a quebra de linha. Fora isso o CSV é texto puro.
+    function enviarCsv(res, nome, linhas) {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+        res.send(`\uFEFF${linhas.join('\r\n')}\r\n`);
+    }
+
+    function nomeDoArquivo(empresa, assunto) {
+        return `klok-${empresa.codigo}-${assunto}-${new Date().toISOString().slice(0, 10)}.csv`;
+    }
+
+    function exportarFuncionariosCsv(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
+
+        const linhas = ['id;nome;numero;email'];
+        for (const funcionario of aberta.banco.listarFuncionarios()) {
+            linhas.push(
+                [funcionario.id, funcionario.nome, funcionario.numero, funcionario.email].map(campoCsv).join(';')
+            );
+        }
+        enviarCsv(res, nomeDoArquivo(aberta.empresa, 'funcionarios'), linhas);
+    }
+
+    function exportarPontosCsv(req, res) {
+        // Mesmas mensagens das rotas de leitura do painel, para o app tratar igual.
+        const funcionarioId = inteiroPositivo(req.query.funcionarioId);
+        if (req.query.funcionarioId && funcionarioId === null) {
+            return res.status(400).json({ erro: 'Funcionário inválido' });
+        }
+        const de = dataIso(req.query.de);
+        if (req.query.de && de === null) return res.status(400).json({ erro: 'Data inicial inválida' });
+        const ate = dataIso(req.query.ate);
+        if (req.query.ate && ate === null) return res.status(400).json({ erro: 'Data final inválida' });
+
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
+
+        const total = aberta.banco.contarPontosFiltrados({ funcionarioId, de, ate });
+        if (total > LIMITE_CSV_PONTOS) {
+            return res.status(400).json({ erro: 'Mais de 10.000 pontos. Filtre por funcionário ou período.' });
+        }
+
+        const { pontos } = aberta.banco.listarPontosFiltrados({
+            funcionarioId,
+            de,
+            ate,
+            limite: LIMITE_CSV_PONTOS,
+            pagina: 1,
+        });
+
+        const linhas = ['id;funcionario;dataHora;tipo'];
+        for (const ponto of pontos) {
+            // Data legível no fuso da empresa, sem a vírgula que o formato em português insere.
+            const quando = new Date(ponto.dataHora)
+                .toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                .replace(', ', ' ');
+            linhas.push([ponto.id, ponto.funcionarioNome, quando, ponto.tipo].map(campoCsv).join(';'));
+        }
+        enviarCsv(res, nomeDoArquivo(aberta.empresa, 'pontos'), linhas);
+    }
+
+    return { backup, restaurarBackup, exportarFuncionariosCsv, exportarPontosCsv };
+}

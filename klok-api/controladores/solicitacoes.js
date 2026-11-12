@@ -1,4 +1,4 @@
-import { avisarAprovacao } from '../avisos.js';
+import { aprovarPedido, recusarPedido } from '../servicos/solicitacoes.js';
 
 const STATUS_VALIDOS = ['pendente', 'aprovado', 'recusado'];
 
@@ -20,18 +20,13 @@ export function criarControladoresSolicitacoes({ enviarEmail }) {
         if (!Number.isInteger(id) || id <= 0) {
             return res.status(404).json({ erro: 'Pedido não encontrado' });
         }
-        const pedido = req.banco.buscarSolicitacaoPorId(id);
-        const resultado = req.banco.aprovarSolicitacao(id);
+        const resultado = await aprovarPedido({
+            banco: req.banco,
+            empresa: req.empresa,
+            id,
+            enviarEmail,
+        });
         if (resultado.erro) return res.status(resultado.status).json({ erro: resultado.erro });
-
-        if (pedido) {
-            await avisarAprovacao({
-                enviarEmail,
-                empresa: req.empresa,
-                usuario: pedido.usuario,
-                email: pedido.email,
-            });
-        }
         res.status(201).json(resultado.funcionario);
     }
 
@@ -40,7 +35,7 @@ export function criarControladoresSolicitacoes({ enviarEmail }) {
         if (!Number.isInteger(id) || id <= 0) {
             return res.status(404).json({ erro: 'Pedido não encontrado' });
         }
-        const resultado = req.banco.recusarSolicitacao(id);
+        const resultado = recusarPedido({ banco: req.banco, id });
         if (resultado.erro) return res.status(resultado.status).json({ erro: resultado.erro });
         res.json({ sucesso: true });
     }

@@ -19,18 +19,23 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         for (const sufixo of ARQUIVOS_AUXILIARES) rmSync(caminho + sufixo, { force: true });
     }
 
-    function abrir(codigo) {
+    function abrir(codigo, { permitirDesativada = false, criarSeFaltar = true } = {}) {
         if (!codigoValido(codigo)) {
             return { erro: 'Código de empresa inválido', status: 400 };
         }
         const empresa = catalogo.buscarEmpresa(codigo);
         if (!empresa) return { erro: 'Empresa não encontrada', status: 404 };
-        if (empresa.desativadaEm) return { erro: 'Empresa desativada', status: 403 };
+        if (empresa.desativadaEm && !permitirDesativada) {
+            return { erro: 'Empresa desativada', status: 403 };
+        }
 
         // A consulta ao catálogo acontece em toda abertura de propósito: assim
         // desativar uma empresa vale mesmo que a conexão já esteja no cache.
         let banco = abertos.get(codigo);
         if (!banco) {
+            if (!criarSeFaltar && !existsSync(caminhoDe(codigo))) {
+                return { erro: 'Banco da empresa não encontrado no disco', status: 404 };
+            }
             banco = criarBanco(caminhoDe(codigo), { empresa: codigo });
             abertos.set(codigo, banco);
         }
@@ -81,10 +86,35 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         return catalogo.atualizarEmpresa(codigo, dados);
     }
 
+    // Fecha só a conexão em cache de uma empresa. É o que a restauração de
+    // backup precisa antes de trocar o arquivo no disco, sem derrubar as outras.
+    function fecharBanco(codigo) {
+        const aberto = abertos.get(codigo);
+        if (!aberto) return;
+        aberto.db.close();
+        abertos.delete(codigo);
+    }
+
+    function apagar(codigo) {
+        if (!codigoValido(codigo)) {
+            return { erro: 'Código de empresa inválido', status: 400 };
+        }
+        if (!catalogo.buscarEmpresa(codigo)) {
+            return { erro: 'Empresa não encontrada', status: 404 };
+        }
+        fecharBanco(codigo);
+        if (!catalogo.apagarEmpresa(codigo)) {
+            return { erro: 'Empresa não encontrada', status: 404 };
+        }
+        apagarArquivos(caminhoDe(codigo));
+        return { ok: true };
+    }
+
+    // Fecha todas as conexões em cache, usado no encerramento do processo.
     function fechar() {
         for (const banco of abertos.values()) banco.db.close();
         abertos.clear();
     }
 
-    return { abrir, criarEmpresa, listar, atualizar, caminhoDe, fechar };
+    return { abrir, criarEmpresa, listar, atualizar, apagar, caminhoDe, fecharBanco, fechar };
 }

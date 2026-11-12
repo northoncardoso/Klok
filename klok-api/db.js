@@ -415,6 +415,69 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return { solicitacao: buscarSolicitacaoPorId(id) };
     }
 
+    function resumo() {
+        const um = (sql) => Number(db.prepare(sql).get().total);
+        const ultimo = db.prepare('SELECT MAX(dataHora) AS quando FROM pontos').get();
+        return {
+            funcionarios: um('SELECT COUNT(*) AS total FROM funcionarios'),
+            coordenadores: contarCoordenadores(),
+            pontos: um('SELECT COUNT(*) AS total FROM pontos'),
+            solicitacoesPendentes: contarSolicitacoesPendentes(),
+            ultimoPonto: ultimo.quando ?? null,
+        };
+    }
+
+    function buscarUsuarioPorFuncionarioId(funcionarioId) {
+        return db.prepare('SELECT * FROM usuarios WHERE funcionarioId = ?').get(Number(funcionarioId));
+    }
+
+    function filtrosDePontos({ funcionarioId = null, de = null, ate = null } = {}) {
+        const condicoes = [];
+        const valores = [];
+        if (funcionarioId) {
+            condicoes.push('p.funcionarioId = ?');
+            valores.push(Number(funcionarioId));
+        }
+        if (de) {
+            condicoes.push("date(p.dataHora, '-3 hours') >= ?");
+            valores.push(de);
+        }
+        if (ate) {
+            condicoes.push("date(p.dataHora, '-3 hours') <= ?");
+            valores.push(ate);
+        }
+        return { onde: condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '', valores };
+    }
+
+    function contarPontosFiltrados(filtros = {}) {
+        const { onde, valores } = filtrosDePontos(filtros);
+        return Number(
+            db.prepare(`SELECT COUNT(*) AS total FROM pontos p ${onde}`).get(...valores).total
+        );
+    }
+
+    function listarPontosFiltrados({ limite = 200, pagina = 1, ...filtros } = {}) {
+        const { onde, valores } = filtrosDePontos(filtros);
+        const pontos = db.prepare(
+            `SELECT p.*, f.nome AS funcionarioNome
+             FROM pontos p JOIN funcionarios f ON f.id = p.funcionarioId
+             ${onde}
+             ORDER BY p.dataHora DESC, p.id DESC
+             LIMIT ? OFFSET ?`
+        ).all(...valores, Number(limite), (Number(pagina) - 1) * Number(limite));
+        return { pontos, total: contarPontosFiltrados(filtros) };
+    }
+
+    function listarSolicitacoesPaginado({ status = 'pendente', limite = 200, pagina = 1 } = {}) {
+        const total = Number(
+            db.prepare('SELECT COUNT(*) AS total FROM solicitacoes WHERE status = ?').get(status).total
+        );
+        const solicitacoes = db.prepare(
+            'SELECT * FROM solicitacoes WHERE status = ? ORDER BY criadoEm, id LIMIT ? OFFSET ?'
+        ).all(status, Number(limite), (Number(pagina) - 1) * Number(limite)).map(semSenha);
+        return { solicitacoes, total };
+    }
+
     return {
         db,
         userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
@@ -452,5 +515,10 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         validarSenhaSolicitacao,
         aprovarSolicitacao,
         recusarSolicitacao,
+        resumo,
+        buscarUsuarioPorFuncionarioId,
+        contarPontosFiltrados,
+        listarPontosFiltrados,
+        listarSolicitacoesPaginado,
     };
 }

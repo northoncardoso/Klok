@@ -26,7 +26,7 @@ Plano de implementação em `docs/superpowers/plans/`.
 
 ## Como rodar e testar
 
-- Backend: `cd klok-api` e `npm test`. Hoje são 125 testes. Exige Node 22.5 ou mais
+- Backend: `cd klok-api` e `npm test`. Hoje são 164 testes. Exige Node 22.5 ou mais
   novo por causa do `node:sqlite`. Se o Node do sistema for antigo, use
   `mise use node@22` antes.
 - App: `npm run typecheck`. Rodar com `npx expo start` ou `npx expo run:android`.
@@ -71,7 +71,14 @@ Ordem aprovada, cada bloco com seu design e seu plano.
   `docs/superpowers/plans/2026-11-03-empresas-parte-2-autocadastro.md`. O
   autocadastro local e o login Google viram pedido pendente, o coordenador decide
   na tela de Solicitações e o menu mostra o contador. PR #36.
-- E. Multiempresa parte 3: suporte e resumo no painel (#32), com funcionários,
-  coordenadores, pontos, pedidos e backup.
+- E. Multiempresa parte 3: suporte e resumo no painel (#32). Implementada na
+  branch `feat/painel-parte-3`, com o design em
+  `docs/superpowers/specs/2026-11-09-painel-parte-3-design.md` e o plano em
+  `docs/superpowers/plans/2026-11-09-painel-parte-3.md`. O painel passou a abrir
+  empresa desativada, mostrar resumo, coordenadores, funcionários, pontos com
+  filtro e paginação, solicitações e o estado do banco, além de redefinir senha,
+  impersonar coordenador, editar e apagar funcionário, aprovar e recusar pedido,
+  baixar e restaurar backup, exportar CSV e apagar empresa. A sessão do painel
+  virou cookie `httpOnly` com CSRF, e o Bearer continua valendo para CLI e testes.
 - F. Screenshots e README (#8).
 - G. Limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git) (#20).

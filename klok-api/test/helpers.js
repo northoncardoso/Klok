@@ -64,6 +64,7 @@ export async function iniciarApp(opcoes = {}) {
         clienteGoogle,
         enviarEmail: opcoes.enviarEmail,
         limiteAuth: opcoes.limiteAuth,
+        registrar: opcoes.registrar,
     });
     const servidor = app.listen(0);
     await new Promise((resolve) => servidor.once('listening', resolve));

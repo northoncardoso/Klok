@@ -1,7 +1,21 @@
 import { validarNovoCoordenador } from '../controladores/coordenadores.js';
 import { codigoEmpresa, senha as senhaDe, texto } from '../validacao.js';
+import { criarConsultasAdmin } from './consultas.js';
+import { criarEscritasAdmin } from './escritas.js';
+import { criarExportacoesAdmin } from './exportacoes.js';
+import { criarValorCsrf, definirCookiesSessao, limparCookiesSessao } from './sessao.js';
 
-export function criarControladoresAdmin({ catalogo, gerenciador, gerarTokenAdmin }) {
+export function criarControladoresAdmin({
+    catalogo,
+    gerenciador,
+    gerarTokenAdmin,
+    gerarTokenEmpresa,
+    enviarEmail,
+    registrar,
+}) {
+    // Secure só em produção para o painel local seguir funcionando em http.
+    const producao = () => process.env.NODE_ENV === 'production';
+
     async function login(req, res) {
         const usuario = texto(req.body?.usuario, 'usuario');
         const senha = senhaDe(req.body?.senha);
@@ -13,7 +27,15 @@ export function criarControladoresAdmin({ catalogo, gerenciador, gerarTokenAdmin
             return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
         }
         const token = await gerarTokenAdmin(admin);
+        const csrf = criarValorCsrf();
+        definirCookiesSessao(res, { token, csrf, producao: producao() });
+        // O token continua no corpo para o CLI e os testes que usam Bearer.
         res.json({ token, tipo: 'admin', nome: admin.usuario, id: admin.id });
+    }
+
+    function logout(req, res) {
+        limparCookiesSessao(res, { producao: producao() });
+        res.status(204).end();
     }
 
     function listarEmpresas(req, res) {
@@ -61,5 +83,15 @@ export function criarControladoresAdmin({ catalogo, gerenciador, gerarTokenAdmin
         });
     }
 
-    return { login, listarEmpresas, criarEmpresa, atualizarEmpresa, criarCoordenador };
+    return {
+        login,
+        logout,
+        listarEmpresas,
+        criarEmpresa,
+        atualizarEmpresa,
+        criarCoordenador,
+        ...criarConsultasAdmin({ gerenciador }),
+        ...criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail, registrar }),
+        ...criarExportacoesAdmin({ gerenciador }),
+    };
 }

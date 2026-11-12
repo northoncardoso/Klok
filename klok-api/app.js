@@ -23,7 +23,7 @@ import { criarEnviarEmail } from './email.js';
 const AUD_EMPRESA = 'klok-empresa';
 const AUD_ADMIN = 'klok-admin';
 
-export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, limiteAuth }) {
+export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, limiteAuth, registrar }) {
     const segredo = process.env.JWT_SECRET;
     if (!segredo) {
         throw new Error('JWT_SECRET não definido. Configure a variável de ambiente antes de subir a API.');
@@ -149,6 +149,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
         resolverEmpresa,
         exigirCoordenador,
         enviarEmail: enviarEmailFinal,
+        registrar,
     };
 
     app.use('/api/auth', criarRotaAuth(deps));
@@ -171,7 +172,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
     app.use(
         '/admin',
         express.static(painelDir, {
-            // O painel é interno e guarda o token em sessionStorage: nada de cache.
+            // O painel é interno e guarda a sessão em cookie: nada de cache.
             setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
         })
     );

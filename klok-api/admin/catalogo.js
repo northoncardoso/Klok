@@ -190,6 +190,10 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
         return buscarEmpresa(codigo);
     }
 
+    function apagarEmpresa(codigo) {
+        return db.prepare('DELETE FROM empresas WHERE codigo = ?').run(codigo).changes > 0;
+    }
+
     return {
         db,
         fechar: () => db.close(),
@@ -204,5 +208,6 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
         buscarEmpresa,
         criarEmpresa,
         atualizarEmpresa,
+        apagarEmpresa,
     };
 }

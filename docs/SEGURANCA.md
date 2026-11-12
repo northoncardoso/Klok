@@ -16,7 +16,7 @@ quebra.
 ```bash
 cd klok-api
 mise use node@22      # o projeto exige Node 22.5+ (node:sqlite)
-npm test              # 99 testes, 33 deles de ataque
+npm test              # 164 testes, 33 deles de ataque
 ```
 
 Sem pendência de segurança conhecida no backend. Os achados da auditoria foram
@@ -336,6 +336,52 @@ Riscos residuais:
   cookie `httpOnly`, a proteção de CSRF entra junto;
 - o login do admin tem limite por IP em memória, com o mesmo risco de múltiplas
   instâncias descrito no achado 5.
+
+**Atualizado na parte 3:** os três pontos acima mudaram. O token do painel saiu do
+`sessionStorage` e virou cookie `HttpOnly` com CSRF, e a empresa desativada passou
+a ser aberta nas rotas de admin, porque suporte precisa justamente atender empresa
+desativada. O login e o app continuam recusando. Os detalhes estão na seção
+"Sessão do painel do admin" mais abaixo.
+
+---
+
+## Sessão do painel do admin (parte 3, issue #32)
+
+O painel deixou de guardar token em `sessionStorage` e passou a usar cookie. O
+login responde com dois cookies:
+
+- `klok_admin`: o JWT do admin, com `HttpOnly`, `SameSite=Strict`, `Path=/api/admin`
+  e `Max-Age` de 12 horas, igual à validade do token. Como é `HttpOnly`, script na
+  página não lê nem copia a sessão.
+- `klok_csrf`: valor aleatório de 32 bytes em hexadecimal, sem `HttpOnly`, porque
+  o próprio painel precisa lê-lo para mandar no header `x-csrf-token`.
+
+O `Secure` entra só com `NODE_ENV=production`, senão o painel local em `http://`
+não conseguiria gravar o cookie.
+
+`autenticarAdmin` aceita dois caminhos. Com `Authorization: Bearer`, valida o
+token e segue, sem CSRF, que é o caminho do CLI e dos testes. Com cookie, valida o
+token primeiro e só depois compara o `x-csrf-token` com o `klok_csrf` em tempo
+constante, então um pedido forjado de outro site não consegue nem descobrir se o
+token era válido. O CSRF vale em todo método, inclusive `GET`, e é por isso que o
+download de backup e de CSV passa por `fetch` com header e vira `blob` no painel.
+
+Redefinir a senha de um coordenador sobe o `senhaVersao`, então os tokens antigos
+daquele coordenador caem. Impersonar gera um token de empresa com validade de 12
+horas pelo mesmo caminho do login normal e registra uma linha de auditoria no log
+do servidor, no formato `[klok] admin <usuario> impersonou <coordenador> na empresa
+<CODIGO>`. Quem recebe esse token responde como o coordenador até ele expirar, e
+não existe revogação antes disso além de trocar a senha do coordenador.
+
+Riscos residuais desta parte:
+
+- o CSRF do painel depende de `SameSite=Strict` mais o header. Um navegador antigo
+  sem suporte a `SameSite` fica só com o header, que ainda barra formulário
+  cross-site, mas não protege contra XSS na própria página;
+- o token de impersonação aparece em `prompt` na tela, então fica visível para
+  quem está olhando e pode ir para o histórico de diálogos do navegador;
+- o logout exige sessão viva: com token expirado ele responde 401 sem limpar o
+  cookie, e o painel limpa o estado local de qualquer forma.
 
 ---
 
