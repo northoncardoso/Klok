@@ -172,7 +172,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
     app.use(
         '/admin',
         express.static(painelDir, {
-            // O painel é interno e guarda o token em sessionStorage: nada de cache.
+            // O painel é interno e guarda a sessão em cookie: nada de cache.
             setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
         })
     );
