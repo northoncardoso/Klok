@@ -192,6 +192,39 @@
                         <strong id="banco-tamanho"></strong>
                     </p>
 
+                    <div class="acoes-banco">
+                        <button id="botao-backup" class="secundario" type="button">Baixar backup</button>
+                    </div>
+                    <p class="dica">O backup sai como um arquivo .db completo desta empresa.</p>
+
+                    <div class="acoes-banco">
+                        <label for="arquivo-restaurar">Restaurar backup</label>
+                        <input id="arquivo-restaurar" type="file" accept=".db,application/octet-stream" />
+                        <button id="botao-restaurar" class="secundario" type="button">Restaurar</button>
+                    </div>
+                    <p class="dica">
+                        Restaurar substitui o banco desta empresa. O banco anterior fica guardado no disco e a
+                        confirmação pede o código da empresa.
+                    </p>
+
+                    <div class="acoes-banco">
+                        <button id="botao-csv-funcionarios" class="secundario" type="button">
+                            Exportar funcionários CSV
+                        </button>
+                        <button id="botao-csv-pontos" class="secundario" type="button">
+                            Exportar pontos CSV
+                        </button>
+                    </div>
+                    <p class="dica">
+                        O CSV de pontos usa os filtros de funcionário, De e Até da seção Pontos. Acima de 10.000
+                        pontos, filtre por funcionário ou período.
+                    </p>
+
+                    <div class="acoes-banco">
+                        <button id="botao-apagar-empresa" class="perigo" type="button">Apagar empresa</button>
+                    </div>
+                    <p class="dica">Apagar a empresa remove o banco dela e não tem volta.</p>
+
                     <h3>Primeiro coordenador</h3>
                     <p class="dica">
                         Etapa 2 de 2: crie o acesso do coordenador desta empresa. Ele já entra no app

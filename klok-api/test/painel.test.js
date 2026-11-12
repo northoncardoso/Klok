@@ -46,3 +46,39 @@ test('painel tem as seções de suporte', async (t) => {
         assert.match(html, new RegExp(`id="${id}"`));
     }
 });
+
+test('painel tem as ações de suporte', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const js = await (await fetch(`${s.baseUrl}/admin/admin.js`)).text();
+    for (const nome of [
+        'redefinirSenha',
+        'impersonar',
+        'editarFuncionario',
+        'apagarFuncionario',
+        'aprovarSolicitacao',
+        'recusarSolicitacao',
+        'baixarBackup',
+        'restaurarBackup',
+        'apagarEmpresa',
+        'baixarCsv',
+    ]) {
+        assert.match(js, new RegExp(nome));
+    }
+});
+
+test('painel tem os botões de suporte', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const html = await (await fetch(`${s.baseUrl}/admin`)).text();
+    for (const id of [
+        'botao-backup',
+        'botao-restaurar',
+        'arquivo-restaurar',
+        'botao-csv-funcionarios',
+        'botao-csv-pontos',
+        'botao-apagar-empresa',
+    ]) {
+        assert.match(html, new RegExp(`id="${id}"`));
+    }
+});

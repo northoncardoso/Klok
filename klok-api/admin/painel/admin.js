@@ -20,6 +20,10 @@ const FORMATO_DATA_HORA = new Intl.DateTimeFormat('pt-BR', {
 
 const FORMATO_NUMERO = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
+// Espelha o mínimo que o backend exige para a senha do coordenador. A checagem
+// local só evita uma ida ao servidor para nada.
+const MINIMO_SENHA = 4;
+
 function porId(id) {
     return document.getElementById(id);
 }
@@ -59,14 +63,14 @@ function formatarTamanho(bytes) {
 
 // Download de CSV e de backup não pode ser link direto: o CSRF vale também no
 // GET, então o arquivo precisa sair por fetch com credentials, o header
-// x-csrf-token e a resposta virada em blob com link temporário. As ações de
-// download entram na Task 14.
-async function api(caminho, { method = 'GET', corpo } = {}) {
+// x-csrf-token e a resposta virada em blob com link temporário.
+async function api(caminho, { method = 'GET', corpo, headers = {} } = {}) {
     const resp = await fetch(caminho, {
         method,
         credentials: 'same-origin',
         headers: {
             ...(corpo === undefined ? {} : { 'content-type': 'application/json' }),
+            ...headers,
             ...(estado.csrf ? { 'x-csrf-token': estado.csrf } : {}),
         },
         body: corpo === undefined ? undefined : JSON.stringify(corpo),
@@ -99,8 +103,105 @@ function celulaTexto(valor) {
 }
 
 function celulaAcoes() {
-    // As ações de cada linha entram na Task 14.
+    // Célula das ações de cada linha, preenchida por quem monta a linha.
     return document.createElement('td');
+}
+
+function botaoAcao(texto, classe = 'secundario') {
+    const botao = document.createElement('button');
+    botao.type = 'button';
+    botao.textContent = texto;
+    botao.className = classe;
+    return botao;
+}
+
+// Toda ação desabilita o próprio botão enquanto a requisição corre e reabilita
+// no finally, então uma falha não deixa o botão travado.
+async function comBotao(botao, acao) {
+    if (botao) botao.disabled = true;
+    try {
+        return await acao();
+    } finally {
+        if (botao) botao.disabled = false;
+    }
+}
+
+function nomeDoArquivo(resp, padrao) {
+    const disposicao = resp.headers.get('content-disposition') ?? '';
+    const encontrado = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposicao);
+    if (!encontrado) return padrao;
+    const bruto = encontrado[1].trim();
+    try {
+        return decodeURIComponent(bruto);
+    } catch {
+        return bruto;
+    }
+}
+
+async function lerErro(resp, padrao) {
+    try {
+        const dados = await resp.json();
+        if (dados && dados.erro) return dados.erro;
+    } catch {
+        // Resposta sem JSON: fica a mensagem padrão.
+    }
+    return padrao;
+}
+
+// O download precisa passar pelo fetch por causa do CSRF no GET, então a
+// resposta vira blob e o nome sai do content-disposition quando ele existe.
+async function baixarArquivo(caminho, padrao) {
+    const resp = await fetch(caminho, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: estado.csrf ? { 'x-csrf-token': estado.csrf } : {},
+    });
+
+    if (resp.status === 401 && estado.csrf) {
+        const expirada = 'Sessão expirada, entre de novo.';
+        sair(expirada);
+        throw new Error(expirada);
+    }
+    if (!resp.ok) throw new Error(await lerErro(resp, 'Falha ao baixar o arquivo'));
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nomeDoArquivo(resp, padrao);
+    document.body.append(link);
+    link.click();
+    link.remove();
+    // O endereço só pode ser liberado depois que o navegador leu o clique.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+// A restauração manda bytes crus, então não passa por api(), que serializa o
+// corpo em JSON. O tratamento de sessão expirada é o mesmo.
+async function enviarArquivo(caminho, arquivo, codigo) {
+    const resp = await fetch(caminho, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'content-type': 'application/octet-stream',
+            'x-confirmar-codigo': codigo,
+            ...(estado.csrf ? { 'x-csrf-token': estado.csrf } : {}),
+        },
+        body: arquivo,
+    });
+
+    if (resp.status === 401 && estado.csrf) {
+        const expirada = 'Sessão expirada, entre de novo.';
+        sair(expirada);
+        throw new Error(expirada);
+    }
+    if (!resp.ok) throw new Error(await lerErro(resp, 'Falha ao restaurar o backup'));
+
+    try {
+        return await resp.json();
+    } catch {
+        return null;
+    }
 }
 
 function linhaVazia(corpo, colunas, texto) {
@@ -125,6 +226,8 @@ function limparDadosDaEmpresa() {
     porId('resumo-ultimo-ponto').textContent = 'nenhum';
     porId('banco-versao').textContent = '';
     porId('banco-tamanho').textContent = '';
+    // O arquivo escolhido pertence à empresa anterior, então sai junto com ela.
+    porId('arquivo-restaurar').value = '';
     porId('ponto-paginacao').textContent = '';
     estado.pontosPagina = 1;
     estado.pontosPaginas = 0;
@@ -301,11 +404,20 @@ async function carregarCoordenadores() {
 
         for (const coordenador of lista) {
             const linha = document.createElement('tr');
+            const acoes = celulaAcoes();
+
+            const senha = botaoAcao('Redefinir senha');
+            senha.addEventListener('click', () => redefinirSenha(coordenador.id, senha));
+
+            const token = botaoAcao('Impersonar');
+            token.addEventListener('click', () => impersonar(coordenador.id, token));
+
+            acoes.append(senha, token);
             linha.append(
                 celulaTexto(coordenador.usuario),
                 celulaTexto(coordenador.nome),
                 celulaTexto(coordenador.email),
-                celulaAcoes()
+                acoes
             );
             corpo.append(linha);
         }
@@ -350,11 +462,22 @@ async function carregarFuncionarios() {
         } else {
             for (const funcionario of lista) {
                 const linha = document.createElement('tr');
+                const acoes = celulaAcoes();
+
+                const editar = botaoAcao('Editar');
+                editar.addEventListener('click', () => editarFuncionario(funcionario, linha));
+
+                const apagar = botaoAcao('Apagar', 'perigo');
+                apagar.addEventListener('click', () =>
+                    apagarFuncionario(funcionario.id, funcionario.nome, apagar)
+                );
+
+                acoes.append(editar, apagar);
                 linha.append(
                     celulaTexto(funcionario.nome),
                     celulaTexto(funcionario.numero),
                     celulaTexto(funcionario.email),
-                    celulaAcoes()
+                    acoes
                 );
                 corpo.append(linha);
             }
@@ -452,12 +575,26 @@ async function carregarSolicitacoes() {
 
         for (const solicitacao of solicitacoes) {
             const linha = document.createElement('tr');
+            const acoes = celulaAcoes();
+
+            // Pedido já decidido não tem ação: aprovar de novo ou recusar de
+            // novo só devolveria erro do serviço.
+            if (solicitacao.status === 'pendente') {
+                const aprovar = botaoAcao('Aprovar');
+                aprovar.addEventListener('click', () => aprovarSolicitacao(solicitacao.id, aprovar));
+
+                const recusar = botaoAcao('Recusar', 'perigo');
+                recusar.addEventListener('click', () => recusarSolicitacao(solicitacao.id, recusar));
+
+                acoes.append(aprovar, recusar);
+            }
+
             linha.append(
                 celulaTexto(solicitacao.usuario),
                 celulaTexto(solicitacao.nome),
                 celulaTexto(solicitacao.email),
                 celulaTexto(formatarDataHora(solicitacao.criadoEm)),
-                celulaAcoes()
+                acoes
             );
             corpo.append(linha);
         }
@@ -482,6 +619,342 @@ async function carregarBanco() {
         if (!aindaSelecionada(empresa.codigo)) return;
         mensagem('mensagem-empresa', erro.message);
     }
+}
+
+function caminhoDaEmpresa(empresa, sufixo = '') {
+    return `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}${sufixo}`;
+}
+
+// Volta para a lista de empresas quando a empresa em atendimento deixou de
+// existir, limpando a seleção e o parâmetro da URL.
+function voltarParaLista() {
+    estado.selecionada = null;
+    estado.pontosPagina = 1;
+    estado.pontosPaginas = 0;
+    limparDadosDaEmpresa();
+    mostrar(porId('bloco-empresa'), false);
+    porId('seletor-empresa').value = '';
+    porId('empresa-titulo').textContent = '';
+    porId('empresa-codigo-atual').textContent = '';
+    porId('empresa-status').textContent = '';
+    porId('empresa-nome-atual').value = '';
+    mensagem('mensagem-empresa', '');
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('empresa');
+    window.history.replaceState(null, '', url);
+}
+
+async function redefinirSenha(id, botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    // O prompt não esconde o que é digitado, então a mensagem avisa antes.
+    const digitada = window.prompt(
+        'Nova senha do coordenador. O que você digitar fica visível na tela, então evite fazer isso com alguém olhando.'
+    );
+    if (digitada === null) return;
+    if (digitada.length < MINIMO_SENHA) {
+        mensagem('mensagem-empresa', `A senha precisa ter ao menos ${MINIMO_SENHA} caracteres.`);
+        return;
+    }
+
+    mensagem('mensagem-empresa', '');
+    await comBotao(botao, async () => {
+        try {
+            await api(caminhoDaEmpresa(empresa, `/coordenadores/${id}/senha`), {
+                method: 'POST',
+                corpo: { senha: digitada },
+            });
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', 'Senha redefinida. Os tokens antigos do coordenador deixaram de valer.', 'ok');
+            carregarCoordenadores();
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+async function impersonar(id, botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+    mensagem('mensagem-empresa', '');
+
+    await comBotao(botao, async () => {
+        try {
+            const dados =
+                (await api(caminhoDaEmpresa(empresa, `/coordenadores/${id}/impersonar`), { method: 'POST' })) ?? {};
+            if (!aindaSelecionada(empresa.codigo)) return;
+
+            const horas = dados.expiraEmHoras ?? 12;
+            mensagem('mensagem-empresa', `Token de ${dados.usuario ?? 'coordenador'} gerado.`, 'ok');
+            window.prompt(
+                `Token de acesso do coordenador ${dados.usuario ?? ''}. Ele expira em ${horas} horas. Copie agora, porque o painel não guarda o token.`,
+                dados.token ?? ''
+            );
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+// A edição troca o conteúdo da linha por campos de nome, número e email. O
+// Cancelar só redesenha a lista, então nada é enviado ao servidor.
+function editarFuncionario(funcionario, linha) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+    mensagem('mensagem-empresa', '');
+
+    const campo = (valor, opcoes = {}) => {
+        const entrada = document.createElement('input');
+        entrada.value = valor === null || valor === undefined ? '' : String(valor);
+        entrada.maxLength = opcoes.maximo ?? 120;
+        if (opcoes.tipo) entrada.type = opcoes.tipo;
+        return entrada;
+    };
+
+    const entradaNome = campo(funcionario.nome, { maximo: 120 });
+    const entradaNumero = campo(funcionario.numero, { maximo: 40 });
+    const entradaEmail = campo(funcionario.email, { maximo: 160, tipo: 'email' });
+
+    const celulaCampo = (entrada) => {
+        const celula = document.createElement('td');
+        celula.append(entrada);
+        return celula;
+    };
+
+    const acoes = celulaAcoes();
+    const salvar = botaoAcao('Salvar');
+    const cancelar = botaoAcao('Cancelar');
+    acoes.append(salvar, cancelar);
+
+    linha.textContent = '';
+    linha.append(celulaCampo(entradaNome), celulaCampo(entradaNumero), celulaCampo(entradaEmail), acoes);
+    entradaNome.focus();
+
+    cancelar.addEventListener('click', () => carregarFuncionarios());
+
+    salvar.addEventListener('click', async () => {
+        await comBotao(salvar, async () => {
+            try {
+                await api(caminhoDaEmpresa(empresa, `/funcionarios/${funcionario.id}`), {
+                    method: 'PATCH',
+                    corpo: {
+                        nome: entradaNome.value,
+                        numero: entradaNumero.value,
+                        email: entradaEmail.value,
+                    },
+                });
+                if (!aindaSelecionada(empresa.codigo)) return;
+                mensagem('mensagem-empresa', 'Funcionário atualizado.', 'ok');
+                carregarFuncionarios();
+            } catch (erro) {
+                if (!aindaSelecionada(empresa.codigo)) return;
+                mensagem('mensagem-empresa', erro.message);
+            }
+        });
+    });
+}
+
+async function apagarFuncionario(id, nome, botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const alvo = nome === null || nome === undefined ? '' : String(nome).trim();
+    const digitado = window.prompt(
+        `Apagar ${alvo || 'este funcionário'} apaga também os pontos dele, sem volta. Para confirmar, digite o nome do funcionário.`
+    );
+    if (digitado === null) return;
+    if (digitado.trim() !== alvo) {
+        mensagem('mensagem-empresa', 'O nome digitado não confere. Nada foi apagado.');
+        return;
+    }
+
+    mensagem('mensagem-empresa', '');
+    await comBotao(botao, async () => {
+        try {
+            await api(caminhoDaEmpresa(empresa, `/funcionarios/${id}`), { method: 'DELETE' });
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', 'Funcionário apagado com os pontos dele.', 'ok');
+            carregarFuncionarios();
+            carregarPontos(1);
+            carregarResumo();
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+async function decidirSolicitacao(id, decisao, botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const pergunta =
+        decisao === 'aprovar'
+            ? 'Aprovar este pedido? O funcionário é criado e o aviso por email sai agora.'
+            : 'Recusar este pedido? O login do pedido fica bloqueado.';
+    if (!window.confirm(pergunta)) return;
+
+    mensagem('mensagem-empresa', '');
+    await comBotao(botao, async () => {
+        try {
+            await api(caminhoDaEmpresa(empresa, `/solicitacoes/${id}/${decisao}`), { method: 'POST' });
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', decisao === 'aprovar' ? 'Pedido aprovado.' : 'Pedido recusado.', 'ok');
+            carregarSolicitacoes();
+            carregarResumo();
+            if (decisao === 'aprovar') carregarFuncionarios();
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+function aprovarSolicitacao(id, botao) {
+    return decidirSolicitacao(id, 'aprovar', botao);
+}
+
+function recusarSolicitacao(id, botao) {
+    return decidirSolicitacao(id, 'recusar', botao);
+}
+
+async function baixarBackup(botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+    mensagem('mensagem-empresa', '');
+
+    await comBotao(botao, async () => {
+        try {
+            await baixarArquivo(
+                caminhoDaEmpresa(empresa, '/banco/backup'),
+                `klok-${empresa.codigo}-${new Date().toISOString().slice(0, 10)}.db`
+            );
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', 'Backup baixado.', 'ok');
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+async function restaurarBackup(botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const arquivo = porId('arquivo-restaurar').files?.[0];
+    if (!arquivo) {
+        mensagem('mensagem-empresa', 'Escolha o arquivo do backup antes de restaurar.');
+        return;
+    }
+
+    const digitado = window.prompt(
+        `Restaurar substitui o banco da empresa ${empresa.codigo} e não tem volta. Para confirmar, digite o código da empresa.`
+    );
+    if (digitado === null) return;
+    if (digitado.trim().toUpperCase() !== empresa.codigo) {
+        mensagem('mensagem-empresa', 'O código digitado não confere. Nada foi alterado.');
+        return;
+    }
+
+    mensagem('mensagem-empresa', '');
+    await comBotao(botao, async () => {
+        try {
+            const dados = await enviarArquivo(
+                caminhoDaEmpresa(empresa, '/banco/restaurar'),
+                arquivo,
+                empresa.codigo
+            );
+            if (!aindaSelecionada(empresa.codigo)) return;
+
+            porId('arquivo-restaurar').value = '';
+            mensagem(
+                'mensagem-empresa',
+                `Backup restaurado na versão ${dados?.versao ?? '?'}. O banco anterior ficou guardado no disco.`,
+                'ok'
+            );
+            carregarResumo();
+            carregarCoordenadores();
+            carregarFuncionarios();
+            carregarPontos(1);
+            carregarSolicitacoes();
+            carregarBanco();
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+async function apagarEmpresa(botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const digitado = window.prompt(
+        `Apagar a empresa ${empresa.codigo} remove o banco dela e não tem volta. Para confirmar, digite o código da empresa.`
+    );
+    if (digitado === null) return;
+    if (digitado.trim().toUpperCase() !== empresa.codigo) {
+        mensagem('mensagem-empresa', 'O código digitado não confere. Nada foi apagado.');
+        return;
+    }
+
+    mensagem('mensagem-empresa', '');
+    await comBotao(botao, async () => {
+        try {
+            await api(caminhoDaEmpresa(empresa), {
+                method: 'DELETE',
+                headers: { 'x-confirmar-codigo': empresa.codigo },
+            });
+            estado.empresas = estado.empresas.filter((item) => item.codigo !== empresa.codigo);
+            voltarParaLista();
+            desenharEmpresas();
+            mensagem('mensagem-empresas', `Empresa ${empresa.codigo} apagada.`, 'ok');
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+async function baixarCsv(tipo, botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    let caminho;
+    let padrao;
+    if (tipo === 'funcionarios') {
+        caminho = caminhoDaEmpresa(empresa, '/funcionarios.csv');
+        padrao = `klok-${empresa.codigo}-funcionarios.csv`;
+    } else {
+        // O CSV de pontos respeita os mesmos filtros da tabela de Pontos.
+        const parametros = new URLSearchParams();
+        const funcionarioId = porId('ponto-funcionario').value;
+        if (funcionarioId) parametros.set('funcionarioId', funcionarioId);
+        const de = porId('ponto-de').value;
+        if (de) parametros.set('de', de);
+        const ate = porId('ponto-ate').value;
+        if (ate) parametros.set('ate', ate);
+        const consulta = parametros.toString();
+        caminho = caminhoDaEmpresa(empresa, `/pontos.csv${consulta ? `?${consulta}` : ''}`);
+        padrao = `klok-${empresa.codigo}-pontos.csv`;
+    }
+
+    mensagem('mensagem-empresa', '');
+    await comBotao(botao, async () => {
+        try {
+            await baixarArquivo(caminho, padrao);
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', 'Arquivo baixado.', 'ok');
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
 }
 
 function atualizarNaLista(empresa) {
@@ -643,6 +1116,18 @@ porId('ponto-proximo').addEventListener('click', () => {
 porId('solicitacao-status').addEventListener('change', () => {
     carregarSolicitacoes();
 });
+
+porId('botao-backup').addEventListener('click', (evento) => baixarBackup(evento.currentTarget));
+
+porId('botao-restaurar').addEventListener('click', (evento) => restaurarBackup(evento.currentTarget));
+
+porId('botao-csv-funcionarios').addEventListener('click', (evento) =>
+    baixarCsv('funcionarios', evento.currentTarget)
+);
+
+porId('botao-csv-pontos').addEventListener('click', (evento) => baixarCsv('pontos', evento.currentTarget));
+
+porId('botao-apagar-empresa').addEventListener('click', (evento) => apagarEmpresa(evento.currentTarget));
 
 // O cookie de CSRF sobrevive ao recarregar a página: se ele existe, tentamos
 // abrir o painel direto e o primeiro 401 devolve o login.
