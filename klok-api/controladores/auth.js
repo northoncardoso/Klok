@@ -84,7 +84,13 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         const encontrado = banco.validarSenha(usuarioLimpo, senhaLimpa);
         if (encontrado) {
             const token = await gerarTokenEmpresa(encontrado, req.empresa);
-            return res.json({ token, tipo: encontrado.tipo, nome: encontrado.usuario, id: encontrado.id });
+            return res.json({
+                token,
+                tipo: encontrado.tipo,
+                nome: encontrado.usuario,
+                id: encontrado.id,
+                empresa: req.empresa,
+            });
         }
 
         const pedido = banco.validarSenhaSolicitacao(usuarioLimpo, senhaLimpa);
@@ -123,7 +129,13 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
             const usuario = banco.buscarUsuarioPorGoogleId(sub);
             if (usuario) {
                 const token = await gerarTokenEmpresa(usuario, req.empresa);
-                return res.json({ token, tipo: usuario.tipo, nome: nomeGoogle, id: usuario.id });
+                return res.json({
+                    token,
+                    tipo: usuario.tipo,
+                    nome: nomeGoogle,
+                    id: usuario.id,
+                    empresa: req.empresa,
+                });
             }
 
             const pedido = banco.buscarSolicitacaoPorGoogleId(sub);

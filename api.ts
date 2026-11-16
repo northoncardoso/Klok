@@ -26,7 +26,7 @@ export async function lerEmpresa(): Promise<string> {
 }
 
 export async function salvarEmpresa(codigo: string): Promise<void> {
-    const limpo = codigo.trim().toUpperCase();
+    const limpo = (codigo || '').trim().toUpperCase();
     if (limpo) await SecureStore.setItemAsync(EMPRESA_KEY, limpo);
 }
 
