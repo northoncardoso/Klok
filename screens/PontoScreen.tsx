@@ -8,6 +8,10 @@ type PontoScreenProps = {
     token: string;
 };
 
+/**
+ * Mostrar o relógio em tempo real, o botão de bater ponto e o histórico de batidas do usuário.
+ * Recebe a prop token, usada como credencial nas chamadas à API.
+ */
 export default function PontoScreen({ token }: PontoScreenProps) {
     const [horaAtual, setHoraAtual] = useState(new Date());
     const [pontos, setPontos] = useState<Ponto[]>([]);
@@ -19,6 +23,10 @@ export default function PontoScreen({ token }: PontoScreenProps) {
         return () => clearInterval(intervalo);
     }, [token]);
 
+    /**
+     * Buscar em GET /api/pontos/meus o histórico de quem está logado.
+     * A falha vai só para o console, sem Alert, porque o histórico é secundário nesta tela.
+     */
     const carregarPontos = async () => {
         try {
             const lista = await api.meusPontos(token);
@@ -28,6 +36,7 @@ export default function PontoScreen({ token }: PontoScreenProps) {
         }
     };
 
+    /** Formatar a hora no padrão HH:MM:SS. */
     const formatarHora = (data: Date) => {
         const h = String(data.getHours()).padStart(2, '0');
         const m = String(data.getMinutes()).padStart(2, '0');
@@ -35,17 +44,24 @@ export default function PontoScreen({ token }: PontoScreenProps) {
         return `${h}:${m}:${s}`;
     };
 
+    /** Formatar a data no padrão DD/MM/AAAA. */
     const formatarData = (data: Date) => {
         const d = String(data.getDate()).padStart(2, '0');
         const mes = String(data.getMonth() + 1).padStart(2, '0');
         return `${d}/${mes}/${data.getFullYear()}`;
     };
 
+    /** Converter a data ISO vinda da API em data e hora legíveis. */
     const formatarDataHoraISO = (iso: string) => {
         const data = new Date(iso);
         return `${formatarData(data)}  ${formatarHora(data)}`;
     };
 
+    /**
+     * Registrar a batida com POST /api/pontos e recarregar o histórico.
+     * Enquanto envia, o botão fica desabilitado com o texto "Registrando...", o que barra toque duplo.
+     * Ao dar certo, um Alert confirma o horário registrado. Se falhar, o Alert mostra a mensagem do servidor.
+     */
     const baterPonto = async () => {
         setCarregando(true);
         try {

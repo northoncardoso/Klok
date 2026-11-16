@@ -18,6 +18,11 @@ const ROTULOS = redefinir
 // Em terminal de verdade, pergunta uma a uma. Em entrada canalizada, lê as
 // linhas de uma vez, porque o readline do Node 22 não entrega a segunda
 // resposta quando o stdin não é um TTY.
+/**
+ * Coletar as respostas do formulário no terminal, na mesma ordem de ROTULOS.
+ * Em entrada canalizada, em vez de perguntar uma a uma, lê todas as linhas de uma vez.
+ * @returns {Promise} lista de respostas já sem espaços nas pontas
+ */
 async function coletarRespostas() {
     if (!process.stdin.isTTY) {
         const linhas = readFileSync(0, 'utf8').split(/\r?\n/);

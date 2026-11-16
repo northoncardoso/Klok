@@ -20,6 +20,17 @@ type CardFuncionarioProps = {
 
 type TipoModal = "delete" | "editar" | "links";
 
+/**
+ * Mostrar o cartão de um funcionário com os três modais de deletar, editar e links.
+ *
+ * As props com sufixo Inicial alimentam os campos de edição, e `aoEditar` e
+ * `aoDeletar` avisam a tela de Funcionários para que ela fale com a API. O restante,
+ * aberto e fechado de modal, fica todo dentro do componente. O modal de links ainda
+ * é local, com os campos de LinkedIn, GitHub e portfólio só na memória da tela.
+ *
+ * @param {CardFuncionarioProps} props Identificador, dados iniciais e callbacks de edição e exclusão.
+ * @returns {JSX.Element} Cartão do funcionário com modal e ações.
+ */
 function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDeletar, aoEditar }: CardFuncionarioProps) {
 
     const [modalVisivel, setModalVisivel] = useState(false);
@@ -34,22 +45,26 @@ function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDelet
 
     const [editandoLinks, setEditandoLinks] = useState(false);
 
+    /** Abrir o modal já no tipo pedido. */
     const abrirModal = (tipoDoModal: TipoModal) => {
         setModalVisivel(true);
         setTipoModal(tipoDoModal);
     };
 
+    /** Fechar o modal e limpar o tipo e o modo de edição de links. */
     const fecharModal = () => {
         setModalVisivel(false);
         setTipoModal("");
         setEditandoLinks(false);
     };
 
+    /** Repassar a exclusão para o pai e fechar o modal. */
     const deletarFuncionario = () => {
         aoDeletar();
         fecharModal();
     };
 
+    /** Enviar a edição com campos vazios caindo no valor inicial e fechar o modal. */
     const salvarEdicao = () => {
         const nome = nomeFuncionario.trim() || nomeInicial;
         const numeroFinal = numero.trim() || numeroInicial;
@@ -59,6 +74,7 @@ function CardFuncionario({ id, nomeInicial, numeroInicial, emailInicial, aoDelet
         fecharModal();
     };
 
+    /** Montar o conteúdo do modal conforme o tipo aberto, devolvendo null quando não há tipo. */
     const renderizarTipoModal = () => {
         switch (tipoModal) {
 

@@ -12,6 +12,11 @@ type InputSenhaProps = {
 
 const COR_ICONE = 'gray';
 
+/**
+ * Desenhar o ícone de olho aberto do botão de mostrar senha.
+ *
+ * @returns {JSX.Element} Olho com pupila, sem traço.
+ */
 function OlhoAberto() {
     return (
         <View style={estilosOlho.olho}>
@@ -20,6 +25,11 @@ function OlhoAberto() {
     );
 }
 
+/**
+ * Desenhar o ícone de olho fechado do botão de ocultar senha.
+ *
+ * @returns {JSX.Element} Olho com pupila e traço diagonal.
+ */
 function OlhoFechado() {
     return (
         <View style={estilosOlho.olho}>
@@ -29,6 +39,16 @@ function OlhoFechado() {
     );
 }
 
+/**
+ * Resolver o campo de senha com botão de olho que alterna entre oculto e visível.
+ *
+ * O componente guarda o estado local `visivel` e cuida do `secureTextEntry`, então o
+ * formulário que usa não precisa saber disso. As props `value` e `onChangeText` mantêm
+ * o texto controlado pelo pai e `style` deixa o formulário ajustar o layout.
+ *
+ * @param {InputSenhaProps} props Placeholder, valor, callback de mudança e estilo do grupo.
+ * @returns {JSX.Element} Grupo com TextInput e botão de mostrar ou ocultar.
+ */
 export default function InputSenha({ placeholder, value, onChangeText, style }: InputSenhaProps) {
     const [visivel, setVisivel] = useState(false);
 

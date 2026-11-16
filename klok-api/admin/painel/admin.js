@@ -24,20 +24,32 @@ const FORMATO_NUMERO = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1
 // local só evita uma ida ao servidor para nada.
 const MINIMO_SENHA = 4;
 
+/** Atalho para pegar um elemento do documento pelo id. */
 function porId(id) {
     return document.getElementById(id);
 }
 
+/** Exibir ou ocultar um elemento pelo atributo hidden. */
 function mostrar(elemento, visivel) {
     elemento.hidden = !visivel;
 }
 
+/**
+ * Escrever o aviso de uma área da tela e marcar o tipo dele no dataset, que o CSS usa para colorir.
+ * @param {string} id elemento que recebe o texto
+ * @param {string} texto mensagem exibida
+ * @param {string} tipo erro, ok ou vazio
+ */
 function mensagem(id, texto, tipo = 'erro') {
     const alvo = porId(id);
     alvo.textContent = texto;
     alvo.dataset.tipo = tipo;
 }
 
+/**
+ * Ler o valor do cookie legível de CSRF e devolver string vazia quando ele falta.
+ * @returns {string} o valor que vai no cabeçalho de CSRF de toda chamada
+ */
 function csrfDoCookie() {
     const par = document.cookie
         .split(';')
@@ -46,6 +58,11 @@ function csrfDoCookie() {
     return par ? par.slice('klok_csrf='.length) : '';
 }
 
+/**
+ * Formatar data e hora no padrão curto brasileiro, devolvendo 'nenhum' quando o valor falta.
+ * @param {string|number|null} valor data vinda da API
+ * @returns {string} texto pronto para a tabela, ou o valor cru quando a data é inválida
+ */
 function formatarDataHora(valor) {
     if (!valor) return 'nenhum';
     const data = new Date(valor);
@@ -53,6 +70,11 @@ function formatarDataHora(valor) {
     return FORMATO_DATA_HORA.format(data);
 }
 
+/**
+ * Converter bytes em B, KB ou MB para o tamanho do banco no cartão de resumo.
+ * @param {number} bytes
+ * @returns {string} texto vazio quando o valor não é um número
+ */
 function formatarTamanho(bytes) {
     if (!Number.isFinite(bytes)) return '';
     if (bytes < 1024) return `${bytes} B`;
@@ -64,6 +86,16 @@ function formatarTamanho(bytes) {
 // Download de CSV e de backup não pode ser link direto: o CSRF vale também no
 // GET, então o arquivo precisa sair por fetch com credentials, o header
 // x-csrf-token e a resposta virada em blob com link temporário.
+/**
+ * Chamar a API do painel e devolver o JSON da resposta.
+ *
+ * Toda chamada leva o CSRF no cabeçalho, inclusive GET, porque a sessão vive em
+ * cookie httpOnly e a proteção vale para qualquer requisição autenticada. Um 401
+ * derruba o estado local e devolve o login, menos na própria rota de login.
+ * @param {string} caminho rota da API
+ * @param {object} [opcoes] método, corpo serializado em JSON e cabeçalhos extras
+ * @returns {Promise<object|null>} dados da resposta, ou nulo quando não há JSON
+ */
 async function api(caminho, { method = 'GET', corpo, headers = {} } = {}) {
     const resp = await fetch(caminho, {
         method,
@@ -96,17 +128,29 @@ async function api(caminho, { method = 'GET', corpo, headers = {} } = {}) {
     return dados;
 }
 
+/**
+ * Montar uma célula de tabela com textContent, sem innerHTML, então nada do dado vira HTML.
+ * @param {string|number|null} valor
+ * @returns {HTMLTableCellElement}
+ */
 function celulaTexto(valor) {
     const celula = document.createElement('td');
     celula.textContent = valor === null || valor === undefined ? '' : String(valor);
     return celula;
 }
 
+/** Criar a célula reservada aos botões de ação de uma linha. */
 function celulaAcoes() {
     // Célula das ações de cada linha, preenchida por quem monta a linha.
     return document.createElement('td');
 }
 
+/**
+ * Criar um botão de ação já com type button, para não enviar formulário sem querer.
+ * @param {string} texto rótulo visível
+ * @param {string} [classe] estilo do botão, secundario por padrão
+ * @returns {HTMLButtonElement}
+ */
 function botaoAcao(texto, classe = 'secundario') {
     const botao = document.createElement('button');
     botao.type = 'button';
@@ -117,6 +161,12 @@ function botaoAcao(texto, classe = 'secundario') {
 
 // Toda ação desabilita o próprio botão enquanto a requisição corre e reabilita
 // no finally, então uma falha não deixa o botão travado.
+/**
+ * Rodar uma ação com o botão desabilitado e reabilitar no finally, então uma falha não deixa o botão travado.
+ * @param {HTMLButtonElement|null} botao
+ * @param {Function} acao
+ * @returns {Promise<*>} o resultado da ação
+ */
 async function comBotao(botao, acao) {
     if (botao) botao.disabled = true;
     try {
@@ -126,6 +176,12 @@ async function comBotao(botao, acao) {
     }
 }
 
+/**
+ * Descobrir o nome do arquivo pelo cabeçalho de disposição da resposta, com decodificação de URI.
+ * @param {Response} resp
+ * @param {string} padrao nome usado quando o cabeçalho não traz nada
+ * @returns {string}
+ */
 function nomeDoArquivo(resp, padrao) {
     const disposicao = resp.headers.get('content-disposition') ?? '';
     const encontrado = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposicao);
@@ -138,6 +194,12 @@ function nomeDoArquivo(resp, padrao) {
     }
 }
 
+/**
+ * Ler o campo erro de uma resposta JSON e cair no texto padrão quando não há JSON.
+ * @param {Response} resp
+ * @param {string} padrao
+ * @returns {Promise<string>}
+ */
 async function lerErro(resp, padrao) {
     try {
         const dados = await resp.json();
@@ -150,6 +212,15 @@ async function lerErro(resp, padrao) {
 
 // O download precisa passar pelo fetch por causa do CSRF no GET, então a
 // resposta vira blob e o nome sai do content-disposition quando ele existe.
+/**
+ * Baixar um arquivo por fetch e entregar ao navegador como blob com link temporário.
+ *
+ * O download não pode ser link direto porque o CSRF vale também no GET, então o
+ * cabeçalho de CSRF acompanha a requisição.
+ * @param {string} caminho rota do arquivo
+ * @param {string} padrao nome de reserva quando a resposta não informa
+ * @returns {Promise<void>}
+ */
 async function baixarArquivo(caminho, padrao) {
     const resp = await fetch(caminho, {
         method: 'GET',
@@ -178,6 +249,16 @@ async function baixarArquivo(caminho, padrao) {
 
 // A restauração manda bytes crus, então não passa por api(), que serializa o
 // corpo em JSON. O tratamento de sessão expirada é o mesmo.
+/**
+ * Mandar os bytes crus do backup para a restauração, fora do api(), que só serializa JSON.
+ *
+ * O código da empresa vai no cabeçalho de confirmação e o CSRF no cabeçalho de
+ * sempre. Sessão expirada segue o mesmo tratamento do api().
+ * @param {string} caminho
+ * @param {File|Blob} arquivo
+ * @param {string} codigo código da empresa usado na confirmação
+ * @returns {Promise<object|null>} resposta da restauração, ou nulo quando ela não traz JSON
+ */
 async function enviarArquivo(caminho, arquivo, codigo) {
     const resp = await fetch(caminho, {
         method: 'POST',
@@ -204,6 +285,12 @@ async function enviarArquivo(caminho, arquivo, codigo) {
     }
 }
 
+/**
+ * Inserir uma linha que ocupa todas as colunas com o aviso de lista vazia.
+ * @param {HTMLElement} corpo corpo da tabela
+ * @param {number} colunas quantas colunas a tabela tem
+ * @param {string} texto aviso exibido
+ */
 function linhaVazia(corpo, colunas, texto) {
     const linha = document.createElement('tr');
     const celula = document.createElement('td');
@@ -213,6 +300,12 @@ function linhaVazia(corpo, colunas, texto) {
     corpo.append(linha);
 }
 
+/**
+ * Zerar tabelas, resumos, filtros e paginação ao trocar de empresa, para não misturar dados de duas.
+ *
+ * O filtro de funcionário volta para vazio e o arquivo escolhido para restauração
+ * é descartado, porque os dois eram da empresa anterior.
+ */
 function limparDadosDaEmpresa() {
     for (const id of ['tabela-coordenadores', 'tabela-funcionarios', 'tabela-pontos', 'tabela-solicitacoes']) {
         porId(id).textContent = '';
@@ -235,6 +328,14 @@ function limparDadosDaEmpresa() {
     porId('ponto-proximo').disabled = true;
 }
 
+/**
+ * Encerrar a sessão local, voltar para a tela de login e avisar a API do logout.
+ *
+ * Limpa o estado, esconde o painel e chama a rota de logout direto no fetch, sem
+ * passar por api(), para não cair em laço de 401. A falha do logout é ignorada de
+ * propósito, porque o estado local já está limpo.
+ * @param {string} texto aviso mostrado no login, vazio para não avisar nada
+ */
 function sair(texto) {
     const csrf = estado.csrf;
     estado.csrf = '';
@@ -264,6 +365,7 @@ function sair(texto) {
     }).catch(() => {});
 }
 
+/** Abrir o painel depois do login, limpar o campo de senha e carregar a lista de empresas. */
 function entrarNoPainel() {
     mostrar(porId('bloco-login'), false);
     mostrar(porId('bloco-painel'), true);
@@ -273,6 +375,7 @@ function entrarNoPainel() {
     carregarEmpresas();
 }
 
+/** Preencher o seletor de empresas com as opções do estado, marcando a que está aberta. */
 function desenharSeletorEmpresas() {
     const seletor = porId('seletor-empresa');
     seletor.textContent = '';
@@ -292,6 +395,9 @@ function desenharSeletorEmpresas() {
     seletor.value = estado.selecionada ? estado.selecionada.codigo : '';
 }
 
+/**
+ * Montar a tabela de empresas da tela inicial, célula por célula, com textContent em vez de innerHTML.
+ */
 function desenharEmpresas() {
     const corpo = porId('lista-empresas');
     corpo.textContent = '';
@@ -329,14 +435,20 @@ function desenharEmpresas() {
     desenharSeletorEmpresas();
 }
 
+/** Buscar na lista já carregada a empresa do código informado. */
 function empresaPorCodigo(codigo) {
     return estado.empresas.find((empresa) => empresa.codigo === codigo) || null;
 }
 
+/** Dizer se a empresa do código continua sendo a que está aberta no painel. */
 function aindaSelecionada(codigo) {
     return estado.selecionada !== null && estado.selecionada.codigo === codigo;
 }
 
+/**
+ * Abrir uma empresa no painel: preencher o cabeçalho, gravar o código na URL e carregar todos os blocos.
+ * @param {string} codigo código da empresa escolhida
+ */
 function selecionarEmpresa(codigo) {
     const empresa = empresaPorCodigo(codigo);
     if (!empresa) return;
@@ -368,6 +480,12 @@ function selecionarEmpresa(codigo) {
     carregarBanco();
 }
 
+/**
+ * Buscar o resumo da empresa e preencher os contadores do topo.
+ *
+ * Descartar a resposta quando a empresa trocou no meio da requisição evita
+ * número de uma empresa no cartão da outra.
+ */
 async function carregarResumo() {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -387,6 +505,9 @@ async function carregarResumo() {
     }
 }
 
+/**
+ * Buscar os coordenadores da empresa e montar as linhas com redefinir senha e impersonar.
+ */
 async function carregarCoordenadores() {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -427,6 +548,10 @@ async function carregarCoordenadores() {
     }
 }
 
+/**
+ * Preencher o filtro de funcionários sem perder a escolha atual quando ela ainda existe na lista.
+ * @param {object[]} lista funcionários da empresa
+ */
 function desenharSeletorFuncionarios(lista) {
     const seletor = porId('ponto-funcionario');
     const atual = seletor.value;
@@ -447,6 +572,9 @@ function desenharSeletorFuncionarios(lista) {
     seletor.value = lista.some((funcionario) => String(funcionario.id) === atual) ? atual : '';
 }
 
+/**
+ * Buscar os funcionários da empresa e montar a tabela com edição em linha e exclusão confirmada pelo nome.
+ */
 async function carregarFuncionarios() {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -490,6 +618,10 @@ async function carregarFuncionarios() {
     }
 }
 
+/**
+ * Buscar a página de pontos com os filtros ativos e atualizar a tabela e a navegação.
+ * @param {number} [pagina] página pedida, 1 por padrão
+ */
 async function carregarPontos(pagina = 1) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -552,6 +684,9 @@ const VAZIO_POR_STATUS = {
     recusado: 'Nenhum pedido recusado.',
 };
 
+/**
+ * Buscar os pedidos do status escolhido e montar a tabela, com aprovar e recusar apenas nos pendentes.
+ */
 async function carregarSolicitacoes() {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -604,6 +739,7 @@ async function carregarSolicitacoes() {
     }
 }
 
+/** Buscar versão e tamanho do banco da empresa e mostrar no cartão de banco. */
 async function carregarBanco() {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -621,12 +757,19 @@ async function carregarBanco() {
     }
 }
 
+/**
+ * Montar a rota de uma empresa com o código já escapado para a URL.
+ * @param {object} empresa
+ * @param {string} [sufixo] parte final da rota
+ * @returns {string}
+ */
 function caminhoDaEmpresa(empresa, sufixo = '') {
     return `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}${sufixo}`;
 }
 
 // Volta para a lista de empresas quando a empresa em atendimento deixou de
 // existir, limpando a seleção e o parâmetro da URL.
+/** Limpar a empresa aberta e apagar o parâmetro empresa da URL, devolvendo a tela para a lista. */
 function voltarParaLista() {
     estado.selecionada = null;
     estado.pontosPagina = 1;
@@ -645,6 +788,15 @@ function voltarParaLista() {
     window.history.replaceState(null, '', url);
 }
 
+/**
+ * Pedir a nova senha do coordenador, conferir o mínimo local e enviar para a API.
+ *
+ * A checagem local só evita uma ida ao servidor, que confere de novo. A troca
+ * sobe a versão da senha e derruba os tokens antigos do coordenador.
+ * @param {number} id id do coordenador
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante a chamada
+ * @returns {Promise<void>}
+ */
 async function redefinirSenha(id, botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -676,6 +828,15 @@ async function redefinirSenha(id, botao) {
     });
 }
 
+/**
+ * Gerar um token de acesso para o coordenador e mostrar uma única vez, já que o painel não guarda o token.
+ *
+ * A API registra a impersonação na auditoria, com o usuário do painel e a
+ * empresa usada.
+ * @param {number} id id do coordenador
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante a chamada
+ * @returns {Promise<void>}
+ */
 async function impersonar(id, botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -702,11 +863,22 @@ async function impersonar(id, botao) {
 
 // A edição troca o conteúdo da linha por campos de nome, número e email. O
 // Cancelar só redesenha a lista, então nada é enviado ao servidor.
+/**
+ * Trocar o conteúdo da linha por campos de nome, número e email, com salvar e cancelar.
+ * @param {object} funcionario dados atuais da linha
+ * @param {HTMLTableRowElement} linha linha que vira formulário
+ */
 function editarFuncionario(funcionario, linha) {
     const empresa = estado.selecionada;
     if (!empresa) return;
     mensagem('mensagem-empresa', '');
 
+    /**
+     * Criar um input com o valor atual, o limite de caracteres e o tipo pedido.
+     * @param {string|null} valor
+     * @param {object} [opcoes] maximo e tipo
+     * @returns {HTMLInputElement}
+     */
     const campo = (valor, opcoes = {}) => {
         const entrada = document.createElement('input');
         entrada.value = valor === null || valor === undefined ? '' : String(valor);
@@ -719,6 +891,11 @@ function editarFuncionario(funcionario, linha) {
     const entradaNumero = campo(funcionario.numero, { maximo: 40 });
     const entradaEmail = campo(funcionario.email, { maximo: 160, tipo: 'email' });
 
+    /**
+     * Embrulhar um input numa célula de tabela.
+     * @param {HTMLInputElement} entrada
+     * @returns {HTMLTableCellElement}
+     */
     const celulaCampo = (entrada) => {
         const celula = document.createElement('td');
         celula.append(entrada);
@@ -758,6 +935,16 @@ function editarFuncionario(funcionario, linha) {
     });
 }
 
+/**
+ * Apagar o funcionário e os pontos dele depois da confirmação pelo nome digitado.
+ *
+ * Nome diferente do cadastro encerra o fluxo sem tocar na API, e a exclusão no
+ * servidor remove pontos e usuário na mesma transação.
+ * @param {number} id id do funcionário
+ * @param {string} nome nome usado na confirmação
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante a chamada
+ * @returns {Promise<void>}
+ */
 async function apagarFuncionario(id, nome, botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -788,6 +975,13 @@ async function apagarFuncionario(id, nome, botao) {
     });
 }
 
+/**
+ * Aprovar ou recusar um pedido depois da confirmação e recarregar tabela, resumo e funcionários.
+ * @param {number} id id do pedido
+ * @param {string} decisao aprovar ou recusar
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante a chamada
+ * @returns {Promise<void>}
+ */
 async function decidirSolicitacao(id, decisao, botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -814,14 +1008,21 @@ async function decidirSolicitacao(id, decisao, botao) {
     });
 }
 
+/** Encaminhar o pedido para a decisão de aprovação. */
 function aprovarSolicitacao(id, botao) {
     return decidirSolicitacao(id, 'aprovar', botao);
 }
 
+/** Encaminhar o pedido para a decisão de recusa. */
 function recusarSolicitacao(id, botao) {
     return decidirSolicitacao(id, 'recusar', botao);
 }
 
+/**
+ * Baixar o backup do banco da empresa, que o servidor gera com VACUUM INTO num diretório temporário.
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante o download
+ * @returns {Promise<void>}
+ */
 async function baixarBackup(botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -842,6 +1043,15 @@ async function baixarBackup(botao) {
     });
 }
 
+/**
+ * Enviar o arquivo escolhido para restaurar o banco depois de digitar o código da empresa.
+ *
+ * A digitação do código é a confirmação local, e o código segue também no
+ * cabeçalho de confirmação da requisição. O servidor confere o arquivo, troca o
+ * banco e guarda o anterior em disco.
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante o envio
+ * @returns {Promise<void>}
+ */
 async function restaurarBackup(botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -890,6 +1100,13 @@ async function restaurarBackup(botao) {
     });
 }
 
+/**
+ * Apagar a empresa e o banco dela depois de digitar o código, devolvendo a tela para a lista.
+ *
+ * O código digitado vai também no cabeçalho de confirmação da requisição.
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante a chamada
+ * @returns {Promise<void>}
+ */
 async function apagarEmpresa(botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -921,6 +1138,14 @@ async function apagarEmpresa(botao) {
     });
 }
 
+/**
+ * Baixar o CSV de funcionários ou de pontos, respeitando os filtros da tabela de pontos.
+ *
+ * O servidor corta a exportação de pontos em 10000 linhas.
+ * @param {string} tipo funcionarios ou pontos
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante o download
+ * @returns {Promise<void>}
+ */
 async function baixarCsv(tipo, botao) {
     const empresa = estado.selecionada;
     if (!empresa) return;
@@ -957,6 +1182,10 @@ async function baixarCsv(tipo, botao) {
     });
 }
 
+/**
+ * Substituir ou incluir a empresa no estado, reordenar por código e abrir a empresa atualizada.
+ * @param {object} empresa empresa devolvida pela API
+ */
 function atualizarNaLista(empresa) {
     const indice = estado.empresas.findIndex((item) => item.codigo === empresa.codigo);
     if (indice >= 0) estado.empresas[indice] = empresa;
@@ -966,6 +1195,9 @@ function atualizarNaLista(empresa) {
     selecionarEmpresa(empresa.codigo);
 }
 
+/**
+ * Buscar a lista de empresas, desenhar a tabela e abrir a empresa que veio no parâmetro da URL.
+ */
 async function carregarEmpresas() {
     try {
         const lista = (await api('/api/admin/empresas')) ?? [];

@@ -18,6 +18,10 @@ type CoordenadoresScreenProps = {
     token: string;
 };
 
+/**
+ * Exibir a lista de coordenadores da empresa junto do modal de criação de um novo.
+ * Recebe a prop token, usada como credencial em todas as chamadas à API.
+ */
 export default function CoordenadoresScreen({ token }: CoordenadoresScreenProps) {
     const [lista, setLista] = useState<Coordenador[]>([]);
     const [modalVisivel, setModalVisivel] = useState(false);
@@ -32,6 +36,10 @@ export default function CoordenadoresScreen({ token }: CoordenadoresScreenProps)
         carregar();
     }, [token]);
 
+    /**
+     * Buscar em GET /api/coordenadores a lista da empresa e guardar no estado.
+     * Se falhar, mostra um Alert com a mensagem do servidor e mantém a lista anterior.
+     */
     const carregar = async () => {
         try {
             setLista(await api.listarCoordenadores(token));
@@ -40,6 +48,9 @@ export default function CoordenadoresScreen({ token }: CoordenadoresScreenProps)
         }
     };
 
+    /**
+     * Zerar os cinco campos do formulário depois da criação ou do cancelamento.
+     */
     const limparFormulario = () => {
         setUsuario('');
         setSenha('');
@@ -48,6 +59,12 @@ export default function CoordenadoresScreen({ token }: CoordenadoresScreenProps)
         setNumero('');
     };
 
+    /**
+     * Conferir os campos obrigatórios e enviar POST /api/coordenadores para criar o coordenador.
+     * Enquanto salva, o botão fica desabilitado com o texto "Salvando...", o que barra toque duplo.
+     * Ao concluir, recarrega a lista, fecha o modal e limpa o formulário. Se der erro, o Alert mostra
+     * a mensagem do servidor e o modal continua aberto com os dados digitados.
+     */
     const criar = async () => {
         if (!usuario.trim() || !senha || !email.trim() || !numero.trim()) {
             Alert.alert('Atenção', 'Preencha usuário, senha, email e número.');

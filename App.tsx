@@ -30,6 +30,12 @@ type Redefinicao = { empresa: string; token: string };
 
 const LARGURA_MENU = Dimensions.get('window').width * 0.7;
 
+/**
+ * Extrair empresa e token de redefinição da URL que abriu o app.
+ *
+ * @param {string} url URL recebida pelo deep link.
+ * @returns {Redefinicao | null} Dados do link ou null quando falta o token.
+ */
 function parametrosDoLink(url: string): Redefinicao | null {
     const query = url.split('?')[1];
     if (!query) return null;
@@ -49,6 +55,17 @@ function parametrosDoLink(url: string): Redefinicao | null {
     return { empresa: (valores.empresa || '').trim().toUpperCase(), token: valores.token };
 }
 
+/**
+ * Resolver a raiz do app: portão de carga da sessão, login, menu lateral e troca de telas.
+ *
+ * Enquanto a sessão gravada é lida, mostra o indicador de carga ou a tela de erro com
+ * botão de tentar novamente. Sem sessão, entrega a HomeScreen; com sessão, libera o menu
+ * lateral e as telas de ponto, funcionários, coordenadores, solicitações e usuário. O menu
+ * de coordenador mostra o contador de pedidos pendentes, e o estado da sessão é mantido
+ * aqui e regravado no SecureStore quando o nome muda.
+ *
+ * @returns {JSX.Element} Árvore da tela atual ou do portão.
+ */
 export default function App() {
     const [telaAtual, setTelaAtual] = useState<Tela>('Home');
     const [menuVisivel, setMenuVisivel] = useState(false);
@@ -61,6 +78,7 @@ export default function App() {
     const posicaoMenu = useRef(new Animated.Value(-LARGURA_MENU)).current;
     const opacidadeOverlay = useRef(new Animated.Value(0)).current;
 
+    /** Ler a sessão gravada e abrir direto no ponto, ou marcar o portão como pronto ou com erro. */
     const carregarSessao = async () => {
         setPortao({ estado: 'carregando' });
         try {
@@ -76,6 +94,7 @@ export default function App() {
     };
 
     useEffect(() => {
+        /** Aplicar a URL recebida: gravar a empresa e abrir a tela de redefinição. */
         const aplicarLink = (url?: string | null) => {
             if (!url) return;
             const dados = parametrosDoLink(url);
@@ -92,6 +111,7 @@ export default function App() {
         carregarSessao();
     }, []);
 
+    /** Buscar o total de solicitações pendentes, zerando para funcionário ou em caso de falha. */
     const atualizarContagemSolicitacoes = async () => {
         if (!sessao || sessao.tipo !== 'coordenador') {
             setPendentes(0);
@@ -108,10 +128,12 @@ export default function App() {
         void atualizarContagemSolicitacoes();
     }, [sessao?.token, sessao?.tipo]);
 
+    /** Recarregar a sessão depois da falha no portão. */
     const tentarNovamente = () => {
         carregarSessao();
     };
 
+    /** Atualizar a contagem e animar a entrada do menu lateral com o fundo escurecido. */
     const abrirMenu = () => {
         void atualizarContagemSolicitacoes();
         setMenuVisivel(true);
@@ -121,6 +143,7 @@ export default function App() {
         ]).start();
     };
 
+    /** Animar a saída do menu e só desmontar quando a animação termina. */
     const fecharMenu = () => {
         Animated.parallel([
             Animated.timing(posicaoMenu, { toValue: -LARGURA_MENU, duration: 200, useNativeDriver: true }),
@@ -128,6 +151,7 @@ export default function App() {
         ]).start(() => setMenuVisivel(false));
     };
 
+    /** Apagar a sessão do SecureStore e voltar para a HomeScreen deslogada. */
     const confirmarSaida = async () => {
         setModalSairVisivel(false);
         await limparSessao();
@@ -136,12 +160,14 @@ export default function App() {
         fecharMenu();
     };
 
+    /** Trocar a tela atual, recarregar o contador ao entrar em Solicitações e fechar o menu. */
     const irPara = (tela: Tela) => {
         if (tela === 'Solicitacoes') void atualizarContagemSolicitacoes();
         setTelaAtual(tela);
         fecharMenu();
     };
 
+    /** Trocar o nome na sessão em memória e regravar a sessão no SecureStore. */
     const atualizarNomeSessao = (nome: string) => {
         setSessao((atual) => {
             if (!atual) return atual;
@@ -151,6 +177,7 @@ export default function App() {
         });
     };
 
+    /** Limpar o link de redefinição e a sessão, voltando para a HomeScreen. */
     const aoConcluirRedefinicao = async () => {
         setRedefinicao(null);
         await limparSessao();
@@ -158,11 +185,13 @@ export default function App() {
         setTelaAtual('Home');
     };
 
+    /** Guardar a sessão devolvida pelo login e abrir a tela de ponto. */
     const entrarComSessao = (dados: Sessao) => {
         setSessao(dados);
         setTelaAtual('Bater o ponto');
     };
 
+    /** Escolher o que renderizar: redefinição de senha, login sem sessão ou a tela do menu. */
     const renderizarTela = () => {
         if (redefinicao) {
             return (
