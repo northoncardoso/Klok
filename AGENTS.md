@@ -8,21 +8,35 @@ Repo: https://github.com/northoncardoso/Klok
 
 ## Skills de processo (superpowers)
 
-Instaladas em `~/.agents/skills`, carregadas automaticamente pelo opencode.
+Pacote `obra/superpowers`, instalado em `~/.agents/skills` e carregado
+automaticamente pelo opencode em toda sessão deste projeto.
+
+Regra de entrada: `using-superpowers` vem antes de qualquer resposta, inclusive
+antes de perguntar algo. Se existe chance da skill se aplicar, ela é invocada.
+Depois anunciar em uma linha o que está sendo usado, por exemplo:
+"Usando brainstorming para fechar o design".
+
 Para trabalho no Klok, seguir este fluxo:
 
-1. `brainstorming`: antes de criar qualquer feature ou mudar comportamento. Ela
+1. `using-superpowers`: porta de entrada, escolhe a skill do momento.
+2. `brainstorming`: antes de criar qualquer feature ou mudar comportamento. Ela
    classifica o trabalho (spike, bounded ou arquitetural), faz as perguntas e
    fecha o design.
-2. `writing-plans`: depois do design aprovado, gerar o plano de implementação.
-3. `executing-plans` ou `subagent-driven-development`: para executar o plano.
-4. `test-driven-development`: ao implementar, teste primeiro.
-5. `systematic-debugging`: para qualquer bug, antes de tentar consertar.
-6. `verification-before-completion`: antes de dizer que terminou.
-7. `using-git-worktrees`: para isolar mudanças grandes.
+3. `writing-plans`: depois do design aprovado, gerar o plano de implementação.
+4. `executing-plans` ou `subagent-driven-development`, mais
+   `dispatching-parallel-agents` quando as tarefas forem independentes: para
+   executar o plano.
+5. `test-driven-development`: ao implementar, teste primeiro.
+6. `systematic-debugging`: para qualquer bug, antes de tentar consertar.
+7. `requesting-code-review` e `receiving-code-review`: na revisão do trabalho.
+8. `verification-before-completion`: antes de dizer que terminou.
+9. `finishing-a-development-branch`: para integrar a branch ao final.
+10. `using-git-worktrees`: para isolar mudanças grandes.
 
 Documento de design em `docs/superpowers/specs/`.
 Plano de implementação em `docs/superpowers/plans/`.
+Registro do subagent-driven-development em `.superpowers/sdd/`, que fica fora do
+git.
 
 ## Como rodar e testar
 

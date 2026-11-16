@@ -25,6 +25,9 @@ const gerenciador = criarGerenciador({ catalogo, dadosDir });
 const app = criarApp({ gerenciador, catalogo });
 
 const porta = Number(process.env.PORT || 3000);
+/**
+ * Registrar no console a porta em que a API passou a aceitar conexões.
+ */
 app.listen(porta, '0.0.0.0', () => {
     console.log(`API Klok rodando em http://0.0.0.0:${porta}`);
 });

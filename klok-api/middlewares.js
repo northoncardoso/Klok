@@ -6,6 +6,12 @@ import { codigoEmpresa } from './validacao.js';
 const AUD_EMPRESA = 'klok-empresa';
 const AUD_ADMIN = 'klok-admin';
 
+/**
+ * Indicar se o token foi emitido antes da última troca de senha, o que revoga a sessão.
+ * @param {object} payload conteúdo do JWT, com a versão em `v`
+ * @param {object} usuario registro atual do usuário ou do admin
+ * @returns {boolean}
+ */
 function tokenAnteriorATrocaDeSenha(payload, usuario) {
     const versaoDoToken = Number(payload.v) || 0;
     const versaoAtual = Number(usuario.senhaVersao) || 0;
@@ -15,6 +21,12 @@ function tokenAnteriorATrocaDeSenha(payload, usuario) {
 // Resolve o banco da empresa pelo código que vem no corpo, na query ou na rota.
 // Código desconhecido e empresa desativada respondem igual, de propósito: a
 // resposta não pode servir para descobrir quais códigos existem.
+/**
+ * Criar o middleware que resolve a empresa pelo código e injeta req.banco e req.empresa.
+ * Responde 400 sem código e 401 para código desconhecido ou empresa desativada.
+ * @param {object} deps objeto com o gerenciador de bancos
+ * @returns {Function} middleware do Express
+ */
 export function criarResolverEmpresa({ gerenciador }) {
     return function resolverEmpresa(req, res, next) {
         const codigo = codigoEmpresa(req.body?.empresa ?? req.query?.empresa ?? req.params?.empresa);
@@ -30,6 +42,13 @@ export function criarResolverEmpresa({ gerenciador }) {
     };
 }
 
+/**
+ * Criar o middleware que valida o JWT da empresa e carrega req.usuario, req.banco e req.empresa.
+ * Responde 401 para token ausente, inválido, de outra empresa, de usuário removido
+ * ou emitido antes da troca de senha.
+ * @param {object} deps objeto com o gerenciador de bancos e o segredo em bytes
+ * @returns {Function} middleware assíncrono do Express
+ */
 export function criarAutenticar({ gerenciador, segredo }) {
     return async function autenticar(req, res, next) {
         const header = req.headers.authorization;
@@ -65,6 +84,12 @@ export function criarAutenticar({ gerenciador, segredo }) {
     };
 }
 
+/**
+ * Criar o middleware que autentica o admin do catálogo por Bearer ou por cookie do painel.
+ * No caminho do cookie também exige CSRF válido, respondendo 403 quando falta.
+ * @param {object} deps objeto com o catálogo de empresas e o segredo em bytes
+ * @returns {Function} middleware assíncrono do Express
+ */
 export function criarAutenticarAdmin({ catalogo, segredo }) {
     return async function autenticarAdmin(req, res, next) {
         // Duas formas convivem: Bearer para CLI e testes, cookie para o painel.
@@ -98,6 +123,11 @@ export function criarAutenticarAdmin({ catalogo, segredo }) {
     };
 }
 
+/**
+ * Criar o middleware que exige o papel de coordenador, respondendo 403 para funcionário.
+ * Depende de req.usuario já preenchido pelo autenticar.
+ * @returns {Function} middleware do Express
+ */
 export function criarExigirCoordenador() {
     return function exigirCoordenador(req, res, next) {
         if (req.usuario.tipo !== PAPEL_COORDENADOR) {
@@ -107,6 +137,11 @@ export function criarExigirCoordenador() {
     };
 }
 
+/**
+ * Encadear o resultado do handler no next, para que erro de rota assíncrona chegue ao tratador.
+ * @param {Function} handler rota ou middleware, síncrono ou assíncrono
+ * @returns {Function} middleware do Express
+ */
 export function asyncHandler(handler) {
     return function tratar(req, res, next) {
         Promise.resolve(handler(req, res, next)).catch(next);
@@ -119,6 +154,12 @@ const MENSAGENS_DE_CLIENTE = {
     415: 'Formato de conteúdo não suportado',
 };
 
+/**
+ * Criar o tratador final de erros: expõe mensagem genérica ao cliente, mantém o status 4xx
+ * quando o erro já trouxe um e registra o detalhe apenas em falha 5xx.
+ * @param {object} opcoes registrar, função de log, com console.error como padrão
+ * @returns {Function} middleware de erro do Express
+ */
 export function criarTratadorDeErros({ registrar = console.error } = {}) {
     return function tratarErros(erro, req, res, next) {
         if (res.headersSent) return next(erro);

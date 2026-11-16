@@ -3,6 +3,12 @@ import express, { Router } from 'express';
 import { asyncHandler } from '../middlewares.js';
 import { criarControladoresAdmin } from './controladores.js';
 
+/**
+ * Montar o roteador do painel de suporte, que fica separado do app e usa a
+ * autenticação de admin do catálogo.
+ * @param {object} deps mesmas dependências dos controladores e a autenticação de admin
+ * @returns {object} roteador Express pronto para ser montado em /api/admin
+ */
 export function criarRotaAdmin(deps) {
     const rota = Router();
     const c = criarControladoresAdmin(deps);

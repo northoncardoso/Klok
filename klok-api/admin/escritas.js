@@ -6,7 +6,13 @@ import { codigoEmpresa, senha as senhaDe } from '../validacao.js';
 
 // Escritas do painel de suporte. Como as consultas, elas abrem a empresa
 // permitindo desativada e nunca criam banco ausente.
+/**
+ * Montar os controladores de escrita do painel de suporte.
+ * @param {object} deps gerenciador, gerador de token de empresa, envio de email e log do painel
+ * @returns {object} controladores de senha, impersonação, funcionário, pedido e empresa
+ */
 export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail, registrar = console.log }) {
+    /** Abrir o banco da empresa permitindo desativada e nunca criando banco ausente. */
     function abrirParaAdmin(codigo) {
         return gerenciador.abrir(codigoEmpresa(codigo), {
             permitirDesativada: true,
@@ -14,6 +20,7 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         });
     }
 
+    /** Responder o erro da abertura e devolver false para o controlador parar. */
     function responderAbertura(res, aberta) {
         if (aberta.erro) {
             res.status(aberta.status).json({ erro: aberta.erro });
@@ -24,11 +31,13 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
 
     // Só coordenador pode ser alvo: o painel nunca impersona funcionário, e
     // responder 404 evita confirmar que o id existe com outro papel.
+    /** Buscar o usuário do banco da empresa e devolver apenas se ele for coordenador. */
     function coordenadorDaEmpresa(banco, id) {
         const usuario = banco.buscarUsuarioPorId(Number(id));
         return usuario && usuario.tipo === PAPEL_COORDENADOR ? usuario : null;
     }
 
+    /** Redefinir a senha de um coordenador da empresa, inclusive se ela estiver desativada. */
     function redefinirSenhaCoordenador(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (!responderAbertura(res, aberta)) return;
@@ -49,6 +58,7 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         res.status(204).end();
     }
 
+    /** Gerar um token de empresa para o coordenador alvo e registrar a impersonação na auditoria. */
     async function impersonarCoordenador(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (!responderAbertura(res, aberta)) return;
@@ -72,6 +82,7 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
 
     // A edição mexe nas duas tabelas: a linha de funcionarios e, quando o
     // funcionário tem login, a linha de usuarios ligada a ele.
+    /** Editar os dados do funcionário nas tabelas funcionarios e usuarios. */
     function atualizarFuncionario(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (!responderAbertura(res, aberta)) return;
@@ -91,6 +102,7 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         res.json(aberta.banco.buscarFuncionario(id));
     }
 
+    /** Apagar o funcionário com os pontos e o usuário dele na mesma transação. */
     function apagarFuncionario(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (!responderAbertura(res, aberta)) return;
@@ -104,6 +116,7 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
 
     // A decisão do pedido passa pelo serviço compartilhado com o app, então a
     // regra de aprovação e o aviso por email ficam em um lugar só.
+    /** Aprovar o pedido de cadastro pelo serviço compartilhado com o app, que também avisa por email. */
     async function aprovarSolicitacao(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (!responderAbertura(res, aberta)) return;
@@ -122,6 +135,7 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         res.status(201).json(resultado.funcionario);
     }
 
+    /** Recusar o pedido de cadastro pelo serviço compartilhado com o app. */
     function recusarSolicitacao(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (!responderAbertura(res, aberta)) return;
@@ -137,6 +151,7 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
 
     // Apagar empresa é irreversível, então o cabeçalho obriga o operador a
     // digitar o código e evita derrubar a empresa errada.
+    /** Apagar a empresa do catálogo e os arquivos do banco dela, exigindo o código repetido no cabeçalho de confirmação. */
     function apagarEmpresa(req, res) {
         const codigo = codigoEmpresa(req.params.codigo);
         if (codigoEmpresa(req.get('x-confirmar-codigo')) !== codigo) {

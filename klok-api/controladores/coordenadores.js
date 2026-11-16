@@ -2,6 +2,13 @@ import { emailNormalizado, emailValido, semCaractereDeControle, senha as senhaDe
 
 export const MINIMO_SENHA = 4;
 
+/**
+ * Validar os dados de um novo coordenador.
+ * Devolve os campos normalizados ou o erro com o status HTTP a usar.
+ * @param {object} banco Banco da empresa, usado para checar nome de usuário repetido.
+ * @param {object} body Corpo da requisição com usuario, senha, nome, email e numero.
+ * @returns {object} Objeto com dados quando passa, ou com erro e status quando falha.
+ */
 // Validação compartilhada pelo primeiro cadastro (rota pública) e pelo cadastro
 // feito por um coordenador já autenticado. Devolve { dados } ou { erro, status }.
 export function validarNovoCoordenador(banco, body) {
@@ -29,11 +36,26 @@ export function validarNovoCoordenador(banco, body) {
     return { dados: { usuario, senha, nome, email, numero } };
 }
 
+/**
+ * Montar os controladores de coordenadores.
+ * @returns {object} Controladores listar e criar.
+ */
 export function criarControladoresCoordenadores() {
+    /**
+     * Listar os coordenadores da empresa.
+     * Responde 200 com a lista, sem hash de senha. Exige coordenador, a
+     * checagem fica na rota.
+     */
     function listar(req, res) {
         res.json(req.banco.listarCoordenadores());
     }
 
+    /**
+     * Criar um coordenador na empresa.
+     * Responde 201 com os dados públicos do coordenador criado, 400 em dados
+     * inválidos e 409 quando o nome de usuário já está em uso. Exige
+     * coordenador, a checagem fica na rota. A senha entra no banco em hash.
+     */
     function criar(req, res) {
         const banco = req.banco;
         const resultado = validarNovoCoordenador(banco, req.body);

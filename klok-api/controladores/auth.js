@@ -12,14 +12,21 @@ import { avisarCoordenadores } from '../avisos.js';
 
 const TOKEN_HEX = /^[0-9a-f]{64}$/;
 
+/** Indicar se host, usuário e senha de SMTP estão preenchidos no ambiente. */
 function smtpCompleto() {
     return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+/** Indicar se a API roda com NODE_ENV igual a production. */
 function ehProducao() {
     return process.env.NODE_ENV === 'production';
 }
 
+/**
+ * Escapar os caracteres especiais de HTML de um valor.
+ * @param {*} valor Texto bruto que vai ser interpolado na página.
+ * @returns {string} Valor seguro para entrar no HTML.
+ */
 function escaparHtml(valor) {
     return String(valor)
         .replace(/&/g, '&amp;')
@@ -29,7 +36,21 @@ function escaparHtml(valor) {
         .replace(/'/g, '&#39;');
 }
 
+/**
+ * Montar os controladores de autenticação de uma empresa.
+ * As dependências chegam de fora porque a assinatura do token JWT, a checagem
+ * do Google e o envio de email vêm do app.
+ * @param {object} deps Dependências com gerarTokenEmpresa, googleClient e enviarEmail.
+ * @returns {object} Controladores de autenticação prontos para as rotas.
+ */
 export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviarEmail }) {
+    /**
+     * Registrar um pedido de cadastro pendente, sem criar usuário ainda.
+     * Responde 201 quando o pedido é gravado, 400 em dados inválidos e 409
+     * quando o nome de usuário já está em uso. Não exige coordenador: a conta
+     * só nasce na aprovação. Efeito colateral: grava a solicitação com a senha
+     * já em hash e avisa os coordenadores da empresa por email.
+     */
     async function registrar(req, res) {
         const banco = req.banco;
         const usuario = texto(req.body?.usuario, 'usuario');
@@ -74,6 +95,13 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         });
     }
 
+    /**
+     * Autenticar por usuário e senha no banco da empresa.
+     * Responde 200 com o token JWT quando as credenciais batem, 401 quando não
+     * batem e 403 quando a senha confere mas o cadastro ainda é pedido pendente
+     * ou recusado. Não exige coordenador. A senha é conferida antes de revelar
+     * o estado do pedido, para não expor quem tem cadastro.
+     */
     async function login(req, res) {
         const banco = req.banco;
         const usuarioLimpo = texto(req.body?.usuario, 'usuario');
@@ -108,6 +136,14 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
     }
 
+    /**
+     * Autenticar pela conta Google e emitir o token JWT da empresa.
+     * Responde 200 com token quando a conta já existe, 400 em email inválido,
+     * 401 em token do Google ausente ou inválido e 403 quando o cadastro é
+     * pedido pendente, recusado ou já decidido. Não exige coordenador. Conta
+     * desconhecida vira pedido pendente e dispara aviso por email aos
+     * coordenadores.
+     */
     async function loginGoogle(req, res) {
         const banco = req.banco;
         const idToken = texto(req.body?.idToken, 'token');
@@ -181,6 +217,14 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         }
     }
 
+    /**
+     * Montar o perfil público de um usuário para o app.
+     * Junta os dados do usuário com nome, número e email do funcionário
+     * vinculado, quando existe vínculo, e diz se a conta tem senha local.
+     * @param {object} banco Banco da empresa aberto para a requisição.
+     * @param {object} usuario Registro do usuário autenticado.
+     * @returns {object} Perfil já sem hash de senha.
+     */
     function dadosDeUsuario(banco, usuario) {
         const funcionario =
             usuario.funcionarioId != null ? banco.buscarFuncionario(usuario.funcionarioId) : null;
@@ -197,10 +241,21 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         };
     }
 
+    /**
+     * Devolver o perfil do usuário autenticado.
+     * Responde 200 com os dados do token. Não exige coordenador, vale para
+     * funcionário e para coordenador.
+     */
     function eu(req, res) {
         res.json(dadosDeUsuario(req.banco, req.usuario));
     }
 
+    /**
+     * Atualizar nome, número e email do usuário autenticado.
+     * Responde 200 com o perfil atualizado e 400 em caractere de controle ou
+     * email inválido. Não exige coordenador. Grava no funcionário quando há
+     * vínculo e na tabela de usuários quando não há.
+     */
     function atualizarDados(req, res) {
         const banco = req.banco;
         const nomeLimpo = texto(req.body?.nome, 'nome') || req.usuario.usuario;
@@ -222,6 +277,12 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         res.json(dadosDeUsuario(banco, banco.buscarUsuarioPorId(req.usuario.id)));
     }
 
+    /**
+     * Trocar a senha do usuário autenticado conferindo a senha atual.
+     * Responde 200 em sucesso, 400 em dados inválidos ou conta só Google e 401
+     * quando a senha atual não confere. Não exige coordenador. A gravação sobe
+     * a versão da senha, o que invalida os tokens JWT anteriores.
+     */
     function alterarSenha(req, res) {
         const banco = req.banco;
         const senhaAtual = senhaDe(req.body?.senhaAtual);
@@ -251,6 +312,13 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         mensagem: 'Se este email estiver cadastrado, você receberá um link para redefinir a senha.',
     };
 
+    /**
+     * Enviar por email o link de redefinição de senha.
+     * Responde sempre 200 com mensagem genérica, para não revelar se o email
+     * existe, e 400 em email inválido. Não exige coordenador. Efeito colateral:
+     * grava o hash do token com 30 minutos de validade e envia email. Fora de
+     * produção e sem SMTP devolve também os links, para teste local.
+     */
     async function esqueciSenha(req, res) {
         const banco = req.banco;
         const email = emailNormalizado(req.body?.email);
@@ -286,6 +354,13 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         return res.json({ ...MENSAGEM_GENERICA, linkRedefinicao: urlApp, linkPagina: url });
     }
 
+    /**
+     * Mostrar a página HTML de confirmação do link de redefinição.
+     * Responde 200 com a página quando o token está válido e ainda não foi
+     * usado, e 400 com texto simples quando o token não tem o formato hex. Não
+     * exige coordenador nem token de login, o link vem do email. O código da
+     * empresa e o token entram escapados no HTML.
+     */
     function paginaRedefinicao(req, res) {
         const banco = req.banco;
         const token = texto(req.params.token, 'token');
@@ -311,6 +386,12 @@ export function criarControladoresAuth({ gerarTokenEmpresa, googleClient, enviar
         );
     }
 
+    /**
+     * Gravar a nova senha a partir do token recebido por email.
+     * Responde 200 em sucesso e 400 em token ausente, já usado, expirado ou
+     * senha curta. Não exige coordenador. Efeito colateral: troca o hash da
+     * senha, sobe a versão da senha e marca o token como usado.
+     */
     function redefinirSenha(req, res) {
         const banco = req.banco;
         const token = texto(req.body?.token, 'token');

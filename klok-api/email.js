@@ -3,6 +3,12 @@ import nodemailer from 'nodemailer';
 const CONTROLE = /[\u0000-\u001F\u007F]/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Indicar se o endereço serve como destinatário: texto, sem caractere de controle
+ * e com formato de email.
+ * @param {*} destinatario endereço bruto, como o email gravado no cadastro
+ * @returns {boolean}
+ */
 export function destinatarioValido(destinatario) {
     if (typeof destinatario !== 'string') return false;
     const normalizado = destinatario.trim().toLowerCase();
@@ -10,6 +16,12 @@ export function destinatarioValido(destinatario) {
     return EMAIL.test(normalizado);
 }
 
+/**
+ * Montar a função de envio a partir das variáveis SMTP do ambiente.
+ * Sem SMTP configurado, devolve um envio simulado que só escreve no console e
+ * falha quando NODE_ENV é production.
+ * @returns {Function} enviarEmail que recebe para, assunto e texto
+ */
 export function criarEnviarEmail() {
     const host = process.env.SMTP_HOST;
     const port = Number(process.env.SMTP_PORT || (host ? 587 : 0));
@@ -19,6 +31,11 @@ export function criarEnviarEmail() {
     const comSmtp = !!(host && user && pass);
 
     if (!comSmtp) {
+        /**
+         * Simular o envio, imprimindo destinatário, assunto e texto no console.
+         * @param {object} mensagem para, assunto e texto do email
+         * @returns {Promise<void>}
+         */
         return async function enviarEmailSemSmtp({ para, assunto, texto }) {
             if (process.env.NODE_ENV === 'production') {
                 throw new Error('SMTP não configurado em produção.');
@@ -40,6 +57,11 @@ export function criarEnviarEmail() {
         auth: { user, pass },
     });
 
+    /**
+     * Entregar o email pelo SMTP configurado, recusando destinatário inválido antes do envio.
+     * @param {object} mensagem para, assunto e texto do email
+     * @returns {Promise<void>} rejeita quando o servidor SMTP falha
+     */
     return async function enviarEmail({ para, assunto, texto }) {
         if (!destinatarioValido(para)) {
             throw new Error('Destinatário de email inválido.');
