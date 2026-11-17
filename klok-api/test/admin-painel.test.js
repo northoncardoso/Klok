@@ -446,3 +446,16 @@ test('CSV de pontos recusa mais de 10.000 linhas', async (t) => {
     const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos.csv`, { headers: cabecalhos });
     assert.equal(resp.status, 400);
 });
+
+test('painel devolve 409 ao apagar funcionário de coordenador', async (t) => {
+    const { s, cabecalhos } = await prepararPainel(t);
+    const funcionarioId = Number(s.banco.buscarUsuarioPorLogin('coordenador').funcionarioId);
+
+    const resp = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/funcionarios/${funcionarioId}`, {
+        method: 'DELETE',
+        headers: cabecalhos,
+    });
+    assert.equal(resp.status, 409);
+    assert.match((await resp.json()).erro, /coordenador/i);
+    assert.ok(s.banco.buscarUsuarioPorLogin('coordenador'), 'a conta continua de pé');
+});

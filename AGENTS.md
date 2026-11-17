@@ -40,7 +40,7 @@ git.
 
 ## Como rodar e testar
 
-- Backend: `cd klok-api` e `npm test`. Hoje são 164 testes. Exige Node 22.5 ou mais
+- Backend: `cd klok-api` e `npm test`. Hoje são 175 testes. Exige Node 22.5 ou mais
   novo por causa do `node:sqlite`. Se o Node do sistema for antigo, use
   `mise use node@22` antes.
 - App: `npm run typecheck`. Rodar com `npx expo start` ou `npx expo run:android`.
@@ -96,3 +96,9 @@ Ordem aprovada, cada bloco com seu design e seu plano.
   virou cookie `httpOnly` com CSRF, e o Bearer continua valendo para CLI e testes.
 - F. Screenshots e README (#8).
 - G. Limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git) (#20).
+- H. Coordenador com funcionário vinculado (#42). O coordenador passou a ter
+  registro em `funcionarios` e a bater ponto como qualquer pessoa da empresa:
+  migração 9 corrige os bancos antigos, `criarCoordenador` grava em transação,
+  e apagar funcionário de coordenador devolve 409. Design em
+  `docs/superpowers/specs/2026-11-17-coordenador-bate-ponto-design.md` e plano em
+  `docs/superpowers/plans/2026-11-17-coordenador-bate-ponto.md`.

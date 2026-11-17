@@ -65,12 +65,16 @@ export function criarControladoresFuncionarios() {
 
     /**
      * Apagar um funcionário pelo id.
-     * Responde 204 sem corpo em sucesso e 404 quando o id não existe. Exige
-     * coordenador, a checagem fica na rota.
+     * Responde 204 sem corpo em sucesso, 404 quando o id não existe e 409 quando
+     * o funcionário é um coordenador, porque a conta dele não se apaga por aqui.
+     * Exige coordenador, a checagem fica na rota.
      */
     function apagar(req, res) {
-        const apagou = req.banco.apagarFuncionario(Number(req.params.id));
-        if (!apagou) {
+        const resultado = req.banco.apagarFuncionario(Number(req.params.id));
+        if (resultado.motivo === 'coordenador') {
+            return res.status(409).json({ erro: 'Coordenador não pode ser apagado como funcionário' });
+        }
+        if (!resultado.apagou) {
             return res.status(404).json({ erro: 'Funcionário não encontrado' });
         }
         res.status(204).end();

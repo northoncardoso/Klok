@@ -264,11 +264,30 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return db.prepare('SELECT * FROM funcionarios WHERE id = ?').get(id);
     }
 
-    /** Sobrescrever nome, número e email de um funcionário na tabela funcionarios. */
+    /**
+     * Sobrescrever nome, número e email de um funcionário na tabela funcionarios.
+     *
+     * Quando o funcionário é um coordenador, o mesmo dado é copiado para a linha
+     * de `usuarios`, para a aba de funcionários e a de coordenadores não
+     * mostrarem valores diferentes.
+     */
     function atualizarFuncionario(id, nome, numero, email) {
-        db.prepare(
-            'UPDATE funcionarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
-        ).run(paraTexto(nome), paraTexto(numero), paraTexto(email), id);
+        const nomeLimpo = paraTexto(nome);
+        const numeroLimpo = paraTexto(numero);
+        const emailLimpo = paraTexto(email);
+        db.exec('BEGIN');
+        try {
+            db.prepare(
+                'UPDATE funcionarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
+            ).run(nomeLimpo, numeroLimpo, emailLimpo, id);
+            db.prepare(
+                'UPDATE usuarios SET nome = ?, numero = ?, email = ? WHERE funcionarioId = ?'
+            ).run(nomeLimpo, numeroLimpo, emailLimpo, id);
+            db.exec('COMMIT');
+        } catch (e) {
+            db.exec('ROLLBACK');
+            throw e;
+        }
     }
 
     /**
@@ -302,16 +321,27 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     /**
      * Apagar um funcionário junto com os pontos e o usuário dele, tudo em uma transação.
      *
-     * @returns {boolean} Verdadeiro quando a linha do funcionário existia.
+     * A conta de coordenador não pode ser apagada por aqui: ela existe na aba de
+     * coordenadores, e a lista de funcionários mostra o coordenador como pessoa
+     * da empresa. Sem esse guard, excluir o funcionário derrubaria o login dele.
+     *
+     * @returns {{apagou: boolean, motivo: string|null}} `motivo` é 'coordenador'
+     * quando a exclusão foi recusada, ou null nos demais casos.
      */
     function apagarFuncionario(id) {
+        const ligado = db
+            .prepare('SELECT tipo FROM usuarios WHERE funcionarioId = ? LIMIT 1')
+            .get(id);
+        if (ligado?.tipo === PAPEL_COORDENADOR) {
+            return { apagou: false, motivo: 'coordenador' };
+        }
         db.exec('BEGIN');
         try {
             db.prepare('DELETE FROM pontos WHERE funcionarioId = ?').run(id);
             db.prepare('DELETE FROM usuarios WHERE funcionarioId = ?').run(id);
             const r = db.prepare('DELETE FROM funcionarios WHERE id = ?').run(id);
             db.exec('COMMIT');
-            return r.changes > 0;
+            return { apagou: r.changes > 0, motivo: null };
         } catch (e) {
             db.exec('ROLLBACK');
             throw e;
