@@ -1,5 +1,11 @@
 import { emailNormalizado, emailValido, semCaractereDeControle, texto } from '../validacao.js';
 
+/**
+ * Validar e normalizar os dados de um funcionário.
+ * Devolve os campos limpos ou o erro com o status HTTP a usar.
+ * @param {object} body Corpo da requisição com nome, numero e email opcional.
+ * @returns {object} Objeto com nome, numero e email quando passa, ou com erro e status.
+ */
 // Validação compartilhada entre o app e o painel de suporte.
 export function prepararDadosFuncionario(body) {
     const nome = texto(body?.nome, 'nome');
@@ -14,11 +20,24 @@ export function prepararDadosFuncionario(body) {
     return { nome, numero, email };
 }
 
+/**
+ * Montar os controladores de funcionários.
+ * @returns {object} Controladores listar, criar, atualizar e apagar.
+ */
 export function criarControladoresFuncionarios() {
+    /**
+     * Listar os funcionários da empresa.
+     * Responde 200 com a lista. Exige coordenador, a checagem fica na rota.
+     */
     function listar(req, res) {
         res.json(req.banco.listarFuncionarios());
     }
 
+    /**
+     * Cadastrar um funcionário na empresa.
+     * Responde 201 com o funcionário criado e 400 em dados inválidos. Exige
+     * coordenador, a checagem fica na rota.
+     */
     function criar(req, res) {
         const banco = req.banco;
         const dados = prepararDadosFuncionario(req.body);
@@ -27,6 +46,11 @@ export function criarControladoresFuncionarios() {
         res.status(201).json(banco.buscarFuncionario(id));
     }
 
+    /**
+     * Atualizar um funcionário pelo id.
+     * Responde 200 com o funcionário atualizado, 404 quando o id não existe e
+     * 400 em dados inválidos. Exige coordenador, a checagem fica na rota.
+     */
     function atualizar(req, res) {
         const banco = req.banco;
         const id = Number(req.params.id);
@@ -39,6 +63,11 @@ export function criarControladoresFuncionarios() {
         res.json(banco.buscarFuncionario(id));
     }
 
+    /**
+     * Apagar um funcionário pelo id.
+     * Responde 204 sem corpo em sucesso e 404 quando o id não existe. Exige
+     * coordenador, a checagem fica na rota.
+     */
     function apagar(req, res) {
         const apagou = req.banco.apagarFuncionario(Number(req.params.id));
         if (!apagou) {

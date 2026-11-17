@@ -23,6 +23,13 @@ import { criarEnviarEmail } from './email.js';
 const AUD_EMPRESA = 'klok-empresa';
 const AUD_ADMIN = 'klok-admin';
 
+/**
+ * Montar o app Express com headers de segurança, limitadores, rotas da empresa,
+ * painel administrativo e tratamento de erros.
+ * Lança erro na inicialização quando a variável JWT_SECRET não está definida.
+ * @param {object} deps dependências injetadas, como gerenciador, catalogo e enviarEmail
+ * @returns {object} app do Express pronto para ouvir em uma porta
+ */
 export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, limiteAuth, registrar }) {
     const segredo = process.env.JWT_SECRET;
     if (!segredo) {
@@ -33,6 +40,12 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
 
     // Cada rota tem o próprio balde. Assim um cadastro em excesso não tranca o
     // login, e uma tentativa de força bruta não gasta a cota de outra rota.
+    /**
+     * Criar um limitador de requisições em memória, por chave, que responde 429
+     * com o tempo restante de espera e limpa registros vencidos ao passar de 10 mil chaves.
+     * @param {object} opcoes janela em milissegundos, máximo de requisições, mensagem de erro e função de chave
+     * @returns {Function} middleware do Express
+     */
     function criarLimitador({ janelaMs = 15 * 60 * 1000, max = 20, mensagem, chave = (req) => req.ip }) {
         const registros = new Map();
         return (req, res, next) => {
@@ -62,6 +75,12 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
         };
     }
 
+    /**
+     * Montar a chave do limitador de login com IP, código da empresa e usuário normalizado,
+     * para que tentativas contra uma empresa não consumam a cota de outra.
+     * @param {object} req requisição do Express com body.usuario e body.empresa
+     * @returns {string}
+     */
     function chaveLogin(req) {
         const usuario =
             req.body && typeof req.body.usuario === 'string' ? req.body.usuario.trim().toLowerCase() : '';
@@ -85,6 +104,12 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
         adminLogin: criarLimitador({ max: 10, janelaMs: 15 * 60 * 1000, mensagem: MENSAGEM_LOGIN }),
     };
 
+    /**
+     * Assinar o JWT de um funcionário ou coordenador, com a empresa e a versão da senha.
+     * @param {object} usuario registro do usuário no banco da empresa
+     * @param {string} empresa código da empresa em maiúsculas
+     * @returns {Promise<string>} token HS256 com validade de 12 horas
+     */
     async function gerarTokenEmpresa(usuario, empresa) {
         // A versão da senha viaja no token para que a troca de senha possa
         // revogar as sessões anteriores, sem precisar de lista de revogação.
@@ -101,6 +126,11 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
             .sign(SECRETO);
     }
 
+    /**
+     * Assinar o JWT do admin do catálogo, com a versão da senha para permitir revogação.
+     * @param {object} admin registro do admin no catálogo
+     * @returns {Promise<string>} token HS256 com validade de 12 horas
+     */
     async function gerarTokenAdmin(admin) {
         return new SignJWT({
             sub: String(admin.id),
@@ -119,6 +149,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
     const exigirCoordenador = criarExigirCoordenador();
     const enviarEmailFinal = enviarEmail ?? criarEnviarEmail();
 
+    /** Indicar se a API roda em produção, o que liga o HSTS e endurece os headers. */
     const ehProducao = () => process.env.NODE_ENV === 'production';
 
     const app = express();
@@ -173,6 +204,7 @@ export function criarApp({ gerenciador, catalogo, clienteGoogle, enviarEmail, li
         '/admin',
         express.static(painelDir, {
             // O painel é interno e guarda a sessão em cookie: nada de cache.
+            /** Impedir que o navegador guarde em cache os arquivos estáticos do painel. */
             setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
         })
     );

@@ -16,6 +16,7 @@ const TABELAS_DA_EMPRESA = ['usuarios', 'funcionarios', 'pontos'];
 // painel e o certo é filtrar por funcionário ou período.
 const LIMITE_CSV_PONTOS = 10000;
 
+/** Conferir se o banco tem as tabelas que toda empresa precisa ter. */
 function temTabelasDaEmpresa(banco) {
     const nomes = new Set(
         banco
@@ -32,7 +33,13 @@ function temTabelasDaEmpresa(banco) {
 // A restauração é o caminho mais arriscado do painel: o arquivo atual nunca é
 // removido antes de o substituto estar validado e pronto no mesmo diretório.
 // Assim a empresa nunca fica sem banco, mesmo se algo falhar no meio.
+/**
+ * Montar os controladores de backup, restauração e exportação CSV do painel.
+ * @param {object} deps gerenciador, usado para abrir o banco e trocar o arquivo
+ * @returns {object} controladores de backup, restauração e os dois CSV
+ */
 export function criarExportacoesAdmin({ gerenciador }) {
+    /** Abrir o banco da empresa permitindo desativada e sem criar arquivo ausente. */
     function abrirParaAdmin(codigo) {
         return gerenciador.abrir(codigoEmpresa(codigo), {
             permitirDesativada: true,
@@ -40,6 +47,7 @@ export function criarExportacoesAdmin({ gerenciador }) {
         });
     }
 
+    /** Baixar um backup consistente do banco da empresa, gerado com VACUUM INTO em diretório temporário. */
     function backup(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
@@ -66,6 +74,11 @@ export function criarExportacoesAdmin({ gerenciador }) {
         });
     }
 
+    /**
+     * Trocar o banco da empresa pelo arquivo enviado, validando assinatura
+     * SQLite, integridade, versão de migração e as tabelas da empresa antes de
+     * qualquer troca, e devolvendo o banco anterior se o novo não abrir.
+     */
     function restaurarBackup(req, res) {
         const codigo = codigoEmpresa(req.params.codigo);
         // O header é a trava contra restauração por engano, então compara com o
@@ -197,16 +210,19 @@ export function criarExportacoesAdmin({ gerenciador }) {
 
     // O Excel em português espera ponto e vírgula, BOM para acertar o acento e
     // CRLF para a quebra de linha. Fora isso o CSV é texto puro.
+    /** Enviar as linhas como CSV com BOM, ponto e vírgula e CRLF, no formato que o Excel em português espera. */
     function enviarCsv(res, nome, linhas) {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
         res.send(`\uFEFF${linhas.join('\r\n')}\r\n`);
     }
 
+    /** Montar o nome do CSV com código da empresa, assunto e data do dia. */
     function nomeDoArquivo(empresa, assunto) {
         return `klok-${empresa.codigo}-${assunto}-${new Date().toISOString().slice(0, 10)}.csv`;
     }
 
+    /** Exportar a lista de funcionários da empresa em CSV, inclusive de empresa desativada. */
     function exportarFuncionariosCsv(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
         if (aberta.erro) return res.status(aberta.status).json({ erro: aberta.erro });
@@ -220,6 +236,12 @@ export function criarExportacoesAdmin({ gerenciador }) {
         enviarCsv(res, nomeDoArquivo(aberta.empresa, 'funcionarios'), linhas);
     }
 
+    /**
+     * Exportar os pontos em CSV com os mesmos filtros da listagem, recusando
+     * acima do teto de 10.000 linhas.
+     * @param {object} req query com funcionarioId, de e ate
+     * @param {object} res arquivo CSV, ou erro quando a seleção passa do teto
+     */
     function exportarPontosCsv(req, res) {
         // Mesmas mensagens das rotas de leitura do painel, para o app tratar igual.
         const funcionarioId = inteiroPositivo(req.query.funcionarioId);

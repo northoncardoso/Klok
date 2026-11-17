@@ -272,7 +272,9 @@ test('aprovação de conta Google avisa e libera o login Google', async (t) => {
         body: JSON.stringify({ empresa: EMPRESA, idToken: 'token-google' }),
     });
     assert.equal(login.status, 200);
-    assert.ok((await login.json()).token);
+    const corpo = await login.json();
+    assert.ok(corpo.token);
+    assert.equal(corpo.empresa, EMPRESA, 'o app grava a empresa da sessão a partir da resposta');
 });
 
 test('pedido aprovado sem usuário ativo não vira mensagem de recusa', async (t) => {

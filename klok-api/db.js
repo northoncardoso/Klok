@@ -116,12 +116,21 @@ export const MIGRACOES = [
     },
 ];
 
+/**
+ * Abrir a conexão com o banco de uma empresa e aplicar as migrações pendentes.
+ * Liga o modo WAL e devolve o objeto de acesso com as consultas fechadas sobre a conexão.
+ *
+ * @param {string} caminho Caminho do arquivo SQLite da empresa.
+ * @param {object} opcoes Aceita `empresa`, o código gravado nas linhas novas de usuarios.
+ * @returns {object} Conexão em `db`, `userVersion` e as funções de consulta.
+ */
 export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     const empresa = opcoes?.empresa ?? '';
     const db = new DatabaseSync(caminho);
 
     db.exec('PRAGMA journal_mode = WAL;');
 
+    /** Aplicar em ordem as migrações que ainda não rodaram, cada uma dentro de uma transação. */
     function aplicarMigracoes() {
         const linha = db.prepare('PRAGMA user_version').get();
         const atual = Number(linha.user_version);
@@ -141,10 +150,16 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
 
     aplicarMigracoes();
 
+    /** Informar se já existe algum coordenador cadastrado na tabela usuarios. */
     function existeCoordenador() {
         return !!db.prepare('SELECT id FROM usuarios WHERE tipo = ? LIMIT 1').get(PAPEL_COORDENADOR);
     }
 
+    /**
+     * Inserir um coordenador na tabela usuarios, com o código da empresa e a senha em hash scrypt.
+     *
+     * @returns {object|undefined} A linha do coordenador recém criado.
+     */
     function criarCoordenador(usuario, senha, nome, email, numero) {
         const r = db.prepare(
             `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, nome, numero, email, empresa)
@@ -161,12 +176,14 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return buscarUsuarioPorId(r.lastInsertRowid);
     }
 
+    /** Contar os coordenadores da tabela usuarios. */
     function contarCoordenadores() {
         return Number(
             db.prepare('SELECT COUNT(*) AS total FROM usuarios WHERE tipo = ?').get(PAPEL_COORDENADOR).total
         );
     }
 
+    /** Listar os coordenadores da tabela usuarios em ordem de nome de login. */
     function listarCoordenadores() {
         return db.prepare(
             `SELECT id, usuario, nome, numero, email
@@ -176,6 +193,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         ).all(PAPEL_COORDENADOR);
     }
 
+    /**
+     * Inserir um funcionário na tabela funcionarios.
+     *
+     * @returns {number} Id gerado para a linha nova.
+     */
     function criarFuncionario(nome, numero, email) {
         const r = db.prepare(
             'INSERT INTO funcionarios (nome, numero, email) VALUES (?, ?, ?)'
@@ -183,20 +205,32 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return r.lastInsertRowid;
     }
 
+    /** Listar todos os registros da tabela funcionarios. */
     function listarFuncionarios() {
         return db.prepare('SELECT * FROM funcionarios').all();
     }
 
+    /**
+     * Buscar um funcionário pelo id na tabela funcionarios.
+     *
+     * @returns {object|undefined} A linha encontrada ou undefined.
+     */
     function buscarFuncionario(id) {
         return db.prepare('SELECT * FROM funcionarios WHERE id = ?').get(id);
     }
 
+    /** Sobrescrever nome, número e email de um funcionário na tabela funcionarios. */
     function atualizarFuncionario(id, nome, numero, email) {
         db.prepare(
             'UPDATE funcionarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
         ).run(paraTexto(nome), paraTexto(numero), paraTexto(email), id);
     }
 
+    /**
+     * Atualizar nome, número e email de um usuário na tabela usuarios.
+     *
+     * @returns {object|undefined} A linha atualizada do usuário.
+     */
     function atualizarDadosUsuarios(id, nome, numero, email) {
         db.prepare(
             'UPDATE usuarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
@@ -204,6 +238,12 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return buscarUsuarioPorId(id);
     }
 
+    /**
+     * Gravar o hash novo da senha na tabela usuarios e subir a versão da senha, o que
+     * revoga os tokens emitidos antes da troca.
+     *
+     * @param {string} hashSenha Hash já calculado por quem chama.
+     */
     function atualizarSenha(id, hashSenha) {
         // Incrementar a versão invalida os tokens emitidos antes da troca. Um
         // contador foi escolhido no lugar de carimbo de tempo porque o iat do
@@ -214,6 +254,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         ).run(hashSenha, id);
     }
 
+    /**
+     * Apagar um funcionário junto com os pontos e o usuário dele, tudo em uma transação.
+     *
+     * @returns {boolean} Verdadeiro quando a linha do funcionário existia.
+     */
     function apagarFuncionario(id) {
         db.exec('BEGIN');
         try {
@@ -228,6 +273,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         }
     }
 
+    /**
+     * Criar um funcionário e o usuário local dele, com senha em hash scrypt e o código da empresa.
+     *
+     * @returns {object|undefined} A linha do usuário recém criado.
+     */
     function criarUsuarioLocal(usuario, senha, nome) {
         const funcionarioId = criarFuncionario(nome || usuario, '', '');
         db.prepare(
@@ -236,10 +286,17 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return buscarUsuarioPorLogin(usuario);
     }
 
+    /** Buscar um usuário pelo nome de login na tabela usuarios. */
     function buscarUsuarioPorLogin(usuario) {
         return db.prepare('SELECT * FROM usuarios WHERE usuario = ?').get(paraTexto(usuario));
     }
 
+    /**
+     * Buscar um usuário pelo email, comparando sem diferenciar maiúsculas na tabela usuarios
+     * e também no funcionário vinculado a ele.
+     *
+     * @returns {object|undefined} A linha do usuário ou undefined.
+     */
     function buscarUsuarioPorEmail(email) {
         return db.prepare(
             `SELECT u.* FROM usuarios u
@@ -248,16 +305,19 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         ).get(paraTexto(email), paraTexto(email));
     }
 
+    /** Gravar um token de recuperação de senha na tabela recuperacao_senha, já em hash. */
     function criarRecuperacao(usuarioId, tokenHash, expiraEm) {
         db.prepare(
             'INSERT INTO recuperacao_senha (usuarioId, tokenHash, expiraEm) VALUES (?, ?, ?)'
         ).run(usuarioId, tokenHash, expiraEm);
     }
 
+    /** Buscar o registro de recuperação pelo hash do token, pela coluna indexada. */
     function buscarRecuperacaoPorToken(tokenHash) {
         return db.prepare('SELECT * FROM recuperacao_senha WHERE tokenHash = ?').get(paraTexto(tokenHash));
     }
 
+    /** Marcar um token de recuperação como usado na tabela recuperacao_senha, pelo id do registro. */
     // Recebe o id do registro, não o do usuário: o token de uso único deve ser
     // invalidado sozinho. Marcar por usuário invalidaria de uma vez todos os
     // links pendentes daquele usuário.
@@ -265,14 +325,23 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         db.prepare('UPDATE recuperacao_senha SET usado = 1 WHERE id = ?').run(registroId);
     }
 
+    /** Buscar um usuário pela conta Google na tabela usuarios. */
     function buscarUsuarioPorGoogleId(googleId) {
         return db.prepare('SELECT * FROM usuarios WHERE googleId = ?').get(paraTexto(googleId));
     }
 
+    /** Buscar um usuário pelo id na tabela usuarios. */
     function buscarUsuarioPorId(id) {
         return db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
     }
 
+    /**
+     * Conferir a senha de um usuário local e devolver a linha dele quando confere.
+     * Um hash legado em sha256 é aceito uma vez e regravado em scrypt na mesma chamada,
+     * com escrita na tabela usuarios.
+     *
+     * @returns {object|null} A linha do usuário ainda com senhaHash, ou null.
+     */
     function validarSenha(usuario, senha) {
         if (typeof senha !== 'string') return null;
         const u = buscarUsuarioPorLogin(usuario);
@@ -287,6 +356,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return u;
     }
 
+    /**
+     * Inserir uma batida na tabela pontos com a data e hora atuais em ISO.
+     *
+     * @returns {object} A linha do ponto recém criado.
+     */
     function baterPonto(funcionarioId, tipo) {
         const dataHora = new Date().toISOString();
         const r = db.prepare(
@@ -295,12 +369,14 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return db.prepare('SELECT * FROM pontos WHERE id = ?').get(r.lastInsertRowid);
     }
 
+    /** Listar os pontos de um funcionário da tabela pontos, do mais recente para o mais antigo. */
     function listarPontos(funcionarioId) {
         return db.prepare(
             'SELECT * FROM pontos WHERE funcionarioId = ? ORDER BY dataHora DESC'
         ).all(funcionarioId);
     }
 
+    /** Listar todos os pontos com o nome do funcionário, do mais recente para o mais antigo. */
     function listarTodosPontos() {
         return db.prepare(
             `SELECT p.*, f.nome AS funcionarioNome
@@ -309,16 +385,29 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         ).all();
     }
 
+    /** Informar se o erro do SQLite é violação de índice único, pelo código 2067. */
     function ehConflitoDeUnicidade(erro) {
         return erro?.errcode === 2067;
     }
 
+    /**
+     * Devolver a linha sem o campo senhaHash antes de ela sair desta camada.
+     *
+     * @returns {object|undefined} Cópia da linha sem `senhaHash`.
+     */
     function semSenha(linha) {
         if (!linha) return linha;
         const { senhaHash, ...resto } = linha;
         return resto;
     }
 
+    /**
+     * Gravar um pedido de cadastro na tabela solicitacoes com status pendente.
+     * Exige nome de login ou conta Google e devolve erro quando um dos índices únicos barra a duplicata.
+     *
+     * @param {object} pedido Traz `usuario`, `senhaHash`, `nome`, `email`, `numero` e `googleId`.
+     * @returns {object} O pedido sem `senhaHash`, ou um objeto com `erro` e `status`.
+     */
     function criarSolicitacao({ usuario, senhaHash, nome, email, numero, googleId }) {
         const login = usuario ? paraTexto(usuario) : null;
         const contaGoogle = googleId ? paraTexto(googleId) : null;
@@ -339,30 +428,42 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         }
     }
 
+    /** Escolher o texto de conflito conforme o pedido tenha conta Google ou nome de login. */
     function mensagemDeConflito(contaGoogle) {
         return contaGoogle ? 'Esta conta Google já está em uso' : 'Este nome de usuário já está em uso';
     }
 
+    /** Listar os pedidos de um status na tabela solicitacoes, do mais antigo para o mais novo, sem senhaHash. */
     function listarSolicitacoes(status = 'pendente') {
         return db.prepare('SELECT * FROM solicitacoes WHERE status = ? ORDER BY criadoEm').all(status).map(semSenha);
     }
 
+    /** Buscar um pedido pelo id na tabela solicitacoes, sem o campo senhaHash. */
     function buscarSolicitacaoPorId(id) {
         return semSenha(db.prepare('SELECT * FROM solicitacoes WHERE id = ?').get(id));
     }
 
+    /** Buscar um pedido pelo nome de login na tabela solicitacoes, sem o campo senhaHash. */
     function buscarSolicitacaoPorUsuario(usuario) {
         return semSenha(db.prepare('SELECT * FROM solicitacoes WHERE usuario = ?').get(paraTexto(usuario)));
     }
 
+    /** Buscar um pedido pela conta Google na tabela solicitacoes, sem o campo senhaHash. */
     function buscarSolicitacaoPorGoogleId(googleId) {
         return semSenha(db.prepare('SELECT * FROM solicitacoes WHERE googleId = ?').get(paraTexto(googleId)));
     }
 
+    /** Contar os pedidos com status pendente na tabela solicitacoes, para o contador do menu e do painel. */
     function contarSolicitacoesPendentes() {
         return Number(db.prepare("SELECT COUNT(*) AS total FROM solicitacoes WHERE status = 'pendente'").get().total);
     }
 
+    /**
+     * Conferir a senha de um pedido de cadastro contra o hash em scrypt gravado em solicitacoes.
+     * Só aceita hash no formato atual e nunca devolve o campo senhaHash.
+     *
+     * @returns {object|null} O pedido sem `senhaHash` quando a senha confere, senão null.
+     */
     function validarSenhaSolicitacao(usuario, senha) {
         if (typeof senha !== 'string') return null;
         const linha = db.prepare('SELECT * FROM solicitacoes WHERE usuario = ?').get(paraTexto(usuario));
@@ -371,6 +472,12 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return verificarSenha(senha, linha.senhaHash) ? semSenha(linha) : null;
     }
 
+    /**
+     * Aprovar um pedido pendente: cria o funcionário e o usuário e grava a decisão no pedido,
+     * tudo em uma transação. Duplicata nos índices únicos de usuario ou googleId devolve 409.
+     *
+     * @returns {object} `funcionario` e `usuario` criados, ou `erro` com `status`.
+     */
     function aprovarSolicitacao(id) {
         // A linha crua é necessária para copiar o senhaHash; a versão pública sai sem ele.
         const cru = db.prepare('SELECT * FROM solicitacoes WHERE id = ?').get(id);
@@ -406,6 +513,12 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         }
     }
 
+    /**
+     * Marcar um pedido pendente como recusado na tabela solicitacoes, guardando a data da decisão.
+     * O login da conta recusada segue bloqueado porque nenhum usuário é criado.
+     *
+     * @returns {object} O pedido atualizado, ou `erro` com `status`.
+     */
     function recusarSolicitacao(id) {
         const pedido = buscarSolicitacaoPorId(id);
         if (!pedido) return { erro: 'Pedido não encontrado', status: 404 };
@@ -415,7 +528,14 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return { solicitacao: buscarSolicitacaoPorId(id) };
     }
 
+    /**
+     * Montar os totais da empresa para o painel: funcionários, coordenadores, pontos,
+     * pedidos pendentes e a data do último ponto.
+     *
+     * @returns {object} Contadores por tabela e `ultimoPonto`.
+     */
     function resumo() {
+        /** Contar as linhas de uma consulta que devolve a coluna total. */
         const um = (sql) => Number(db.prepare(sql).get().total);
         const ultimo = db.prepare('SELECT MAX(dataHora) AS quando FROM pontos').get();
         return {
@@ -427,10 +547,17 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         };
     }
 
+    /** Buscar o usuário ligado a um funcionário na tabela usuarios. */
     function buscarUsuarioPorFuncionarioId(funcionarioId) {
         return db.prepare('SELECT * FROM usuarios WHERE funcionarioId = ?').get(Number(funcionarioId));
     }
 
+    /**
+     * Montar o trecho WHERE e a lista de valores para filtrar a tabela pontos por funcionário
+     * e por intervalo de datas. A data é comparada com três horas de recuo, pelo fuso de Brasília.
+     *
+     * @returns {object} `onde` com o trecho SQL e `valores` na ordem dos parâmetros.
+     */
     function filtrosDePontos({ funcionarioId = null, de = null, ate = null } = {}) {
         const condicoes = [];
         const valores = [];
@@ -449,6 +576,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return { onde: condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '', valores };
     }
 
+    /**
+     * Contar os pontos que passam pelos mesmos filtros usados na listagem paginada.
+     *
+     * @returns {number} Total de linhas da tabela pontos para o filtro.
+     */
     function contarPontosFiltrados(filtros = {}) {
         const { onde, valores } = filtrosDePontos(filtros);
         return Number(
@@ -456,6 +588,12 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         );
     }
 
+    /**
+     * Listar pontos com o nome do funcionário, aplicando filtro e paginação.
+     *
+     * @param {object} opcoes Traz `limite`, `pagina` e os filtros aceitos por `filtrosDePontos`.
+     * @returns {object} `pontos` da página e `total` do filtro inteiro.
+     */
     function listarPontosFiltrados({ limite = 200, pagina = 1, ...filtros } = {}) {
         const { onde, valores } = filtrosDePontos(filtros);
         const pontos = db.prepare(
@@ -468,6 +606,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return { pontos, total: contarPontosFiltrados(filtros) };
     }
 
+    /**
+     * Listar os pedidos da tabela solicitacoes de um status, com paginação e total do status.
+     *
+     * @returns {object} `solicitacoes` da página, sem senhaHash, e `total`.
+     */
     function listarSolicitacoesPaginado({ status = 'pendente', limite = 200, pagina = 1 } = {}) {
         const total = Number(
             db.prepare('SELECT COUNT(*) AS total FROM solicitacoes WHERE status = ?').get(status).total
@@ -480,6 +623,7 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
 
     return {
         db,
+        /** Ler a versão de migração gravada no banco da empresa. */
         userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
         existeCoordenador,
         contarCoordenadores,

@@ -6,19 +6,34 @@ import { codigoValido } from './catalogo.js';
 
 const ARQUIVOS_AUXILIARES = ['', '-wal', '-shm'];
 
+/**
+ * Montar o gerenciador que resolve um banco por empresa em cima do catálogo,
+ * mantendo as conexões abertas em cache.
+ * @param {object} deps catalogo, que diz se a empresa existe e está ativa, e dadosDir
+ * @returns {object} abrir, criarEmpresa, listar, atualizar, apagar, caminhoDe, fecharBanco e fechar
+ */
 export function criarGerenciador({ catalogo, dadosDir }) {
     const abertos = new Map();
 
+    /** Resolver o caminho do arquivo do banco da empresa, ou null se o código for inválido. */
     function caminhoDe(codigo) {
         if (!codigoValido(codigo)) return null;
         return join(dadosDir, `${codigo}.db`);
     }
 
+    /** Apagar o arquivo do banco junto dos auxiliares do WAL. */
     function apagarArquivos(caminho) {
         if (!caminho) return;
         for (const sufixo of ARQUIVOS_AUXILIARES) rmSync(caminho + sufixo, { force: true });
     }
 
+    /**
+     * Abrir o banco de uma empresa, consultando o catálogo a cada chamada para a
+     * desativação valer mesmo com a conexão em cache.
+     * @param {string} codigo código da empresa no catálogo
+     * @param {object} opcoes permitirDesativada libera empresa desligada, uso do painel de suporte; criarSeFaltar false devolve 404 quando o arquivo não existe
+     * @returns {object} banco e empresa, ou objeto com erro e status
+     */
     function abrir(codigo, { permitirDesativada = false, criarSeFaltar = true } = {}) {
         if (!codigoValido(codigo)) {
             return { erro: 'Código de empresa inválido', status: 400 };
@@ -42,6 +57,11 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         return { banco, empresa };
     }
 
+    /**
+     * Criar a empresa no catálogo e o banco dela já migrado.
+     * @param {object} dados campo codigo e nome da empresa
+     * @returns {object} empresa criada, ou objeto com erro e status
+     */
     function criarEmpresa({ codigo, nome } = {}) {
         if (!codigoValido(codigo)) {
             return {
@@ -78,16 +98,19 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         return criada;
     }
 
+    /** Listar as empresas do catálogo, ativas e desativadas. */
     function listar() {
         return catalogo.listarEmpresas();
     }
 
+    /** Repassar a atualização de nome e de ativa para o catálogo. */
     function atualizar(codigo, dados) {
         return catalogo.atualizarEmpresa(codigo, dados);
     }
 
     // Fecha só a conexão em cache de uma empresa. É o que a restauração de
     // backup precisa antes de trocar o arquivo no disco, sem derrubar as outras.
+    /** Fechar só a conexão em cache de uma empresa, sem derrubar as outras. */
     function fecharBanco(codigo) {
         const aberto = abertos.get(codigo);
         if (!aberto) return;
@@ -95,6 +118,7 @@ export function criarGerenciador({ catalogo, dadosDir }) {
         abertos.delete(codigo);
     }
 
+    /** Apagar a empresa do catálogo, fechar a conexão e remover os arquivos do banco dela. */
     function apagar(codigo) {
         if (!codigoValido(codigo)) {
             return { erro: 'Código de empresa inválido', status: 400 };
@@ -111,6 +135,7 @@ export function criarGerenciador({ catalogo, dadosDir }) {
     }
 
     // Fecha todas as conexões em cache, usado no encerramento do processo.
+    /** Fechar todas as conexões em cache no encerramento do processo. */
     function fechar() {
         for (const banco of abertos.values()) banco.db.close();
         abertos.clear();

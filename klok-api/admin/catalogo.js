@@ -9,6 +9,7 @@ export const CODIGO_EMPRESA = /^[A-Z][A-Z0-9]{1,19}$/;
 
 const MINIMO_SENHA_ADMIN = 8;
 
+/** Verificar se o código informado segue o padrão do catálogo de empresas. */
 export function codigoValido(codigo) {
     return typeof codigo === 'string' && CODIGO_EMPRESA.test(codigo);
 }
@@ -43,16 +44,24 @@ export const MIGRACOES_CATALOGO = [
     },
 ];
 
+/** Devolver o instante atual em ISO, usado nos carimbos de criação. */
 function agora() {
     return new Date().toISOString();
 }
 
+/** Remover o hash de senha antes de devolver o admin para fora do módulo. */
 function semSegredo(admin) {
     if (!admin) return admin;
     const { senhaHash, ...resto } = admin;
     return resto;
 }
 
+/**
+ * Abrir o catalogo.db, aplicar as migrações pendentes e devolver as operações
+ * do catálogo de empresas e dos admins do painel.
+ * @param {string} caminho caminho do arquivo do catálogo, aceita ':memory:'
+ * @returns {object} conexão, fechar, userVersion e as funções do catálogo
+ */
 export function abrirCatalogo(caminho = 'catalogo.db') {
     if (caminho !== ':memory:') {
         mkdirSync(dirname(caminho), { recursive: true });
@@ -61,6 +70,7 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
     const db = new DatabaseSync(caminho);
     db.exec('PRAGMA journal_mode = WAL;');
 
+    /** Aplicar em ordem as migrações que o catálogo ainda não tem, cada uma em transação. */
     function aplicarMigracoes() {
         const atual = Number(db.prepare('PRAGMA user_version').get().user_version);
         for (const migracao of MIGRACOES_CATALOGO) {
@@ -79,18 +89,26 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
 
     aplicarMigracoes();
 
+    /** Buscar a linha crua do admin pelo usuário, já com o hash de senha. */
     function linhaAdminPorLogin(usuario) {
         return db.prepare('SELECT * FROM admins WHERE usuario = ?').get(texto(usuario, 'usuario'));
     }
 
+    /** Buscar o admin pelo usuário de login sem devolver o hash de senha. */
     function buscarAdminPorLogin(usuario) {
         return semSegredo(linhaAdminPorLogin(usuario));
     }
 
+    /** Buscar o admin pelo id sem devolver o hash de senha. */
     function buscarAdminPorId(id) {
         return semSegredo(db.prepare('SELECT * FROM admins WHERE id = ?').get(Number(id)));
     }
 
+    /**
+     * Criar um admin do catálogo com senha própria, separada da senha do app.
+     * @param {object} dados campo usuario, senha, nome e email do novo admin
+     * @returns {object} admin criado sem o hash de senha, ou objeto com erro e status
+     */
     function criarAdmin({ usuario, senha, nome, email } = {}) {
         const usuarioLimpo = texto(usuario, 'usuario');
         const nomeLimpo = texto(nome, 'nome') || usuarioLimpo;
@@ -119,12 +137,14 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
         return buscarAdminPorId(r.lastInsertRowid);
     }
 
+    /** Conferir a senha do admin e devolver seus dados sem o hash, ou null. */
     function verificarSenhaAdmin(usuario, senha) {
         const linha = linhaAdminPorLogin(usuario);
         if (!linha || !verificarSenha(senha, linha.senhaHash)) return null;
         return semSegredo(linha);
     }
 
+    /** Trocar a senha do admin e subir a senhaVersao para derrubar os tokens antigos. */
     function atualizarSenhaAdmin(id, senha) {
         if (typeof senha !== 'string' || senha.length < MINIMO_SENHA_ADMIN) {
             return {
@@ -139,18 +159,26 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
         return buscarAdminPorId(id);
     }
 
+    /** Contar quantos admins o catálogo já tem. */
     function contarAdmins() {
         return Number(db.prepare('SELECT COUNT(*) AS total FROM admins').get().total);
     }
 
+    /** Listar as empresas do catálogo em ordem de código. */
     function listarEmpresas() {
         return db.prepare('SELECT * FROM empresas ORDER BY codigo').all();
     }
 
+    /** Buscar uma empresa pelo código, ativa ou desativada. */
     function buscarEmpresa(codigo) {
         return db.prepare('SELECT * FROM empresas WHERE codigo = ?').get(codigo);
     }
 
+    /**
+     * Registrar uma empresa nova no catálogo, sem criar o banco dela.
+     * @param {object} dados campo codigo em maiúsculas e nome da empresa
+     * @returns {object} empresa criada, ou objeto com erro e status
+     */
     function criarEmpresa({ codigo, nome } = {}) {
         if (!codigoValido(codigo)) {
             return {
@@ -172,6 +200,12 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
         return buscarEmpresa(codigo);
     }
 
+    /**
+     * Renomear a empresa e desativar ou reativar pelo carimbo desativadaEm.
+     * @param {string} codigo código da empresa no catálogo
+     * @param {object} dados campo nome e ativa, ambos opcionais
+     * @returns {object} empresa atualizada, ou objeto com erro e status
+     */
     function atualizarEmpresa(codigo, { nome, ativa } = {}) {
         const empresa = buscarEmpresa(codigo);
         if (!empresa) return { erro: 'Empresa não encontrada', status: 404 };
@@ -190,13 +224,16 @@ export function abrirCatalogo(caminho = 'catalogo.db') {
         return buscarEmpresa(codigo);
     }
 
+    /** Remover a empresa do catálogo e informar se alguma linha foi apagada. */
     function apagarEmpresa(codigo) {
         return db.prepare('DELETE FROM empresas WHERE codigo = ?').run(codigo).changes > 0;
     }
 
     return {
         db,
+        /** Fechar a conexão do catálogo e liberar o arquivo. */
         fechar: () => db.close(),
+        /** Ler a versão de migração gravada no catálogo. */
         userVersion: () => Number(db.prepare('PRAGMA user_version').get().user_version),
         buscarAdminPorLogin,
         buscarAdminPorId,

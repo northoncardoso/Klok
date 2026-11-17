@@ -122,6 +122,7 @@ test('login local devolve token de empresa', async (t) => {
     const corpo = await login.json();
     assert.ok(corpo.token, 'token deve estar presente');
     assert.equal(corpo.tipo, 'funcionario');
+    assert.equal(corpo.empresa, EMPRESA, 'o app grava a empresa da sessão a partir da resposta');
 });
 
 test('login com senha errada retorna 401', async (t) => {
