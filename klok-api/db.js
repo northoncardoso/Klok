@@ -185,22 +185,40 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     /**
      * Inserir um coordenador na tabela usuarios, com o código da empresa e a senha em hash scrypt.
      *
+     * O coordenador também é uma pessoa da empresa, então nasce com um registro
+     * em `funcionarios` vinculado, o que permite bater ponto. A transação evita
+     * funcionário órfão quando o nome de usuário já existe.
+     *
      * @returns {object|undefined} A linha do coordenador recém criado.
      */
     function criarCoordenador(usuario, senha, nome, email, numero) {
-        const r = db.prepare(
-            `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, nome, numero, email, empresa)
-             VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`
-        ).run(
-            paraTexto(usuario),
-            criarHashSenha(senha),
-            PAPEL_COORDENADOR,
-            paraTexto(nome),
-            paraTexto(numero),
-            paraTexto(email),
-            empresa
-        );
-        return buscarUsuarioPorId(r.lastInsertRowid);
+        const nomeLimpo = paraTexto(nome);
+        const numeroLimpo = paraTexto(numero);
+        const emailLimpo = paraTexto(email);
+        db.exec('BEGIN');
+        try {
+            const funcionario = db
+                .prepare('INSERT INTO funcionarios (nome, numero, email) VALUES (?, ?, ?)')
+                .run(nomeLimpo, numeroLimpo, emailLimpo);
+            const r = db.prepare(
+                `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, nome, numero, email, empresa)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(
+                paraTexto(usuario),
+                criarHashSenha(senha),
+                PAPEL_COORDENADOR,
+                funcionario.lastInsertRowid,
+                nomeLimpo,
+                numeroLimpo,
+                emailLimpo,
+                empresa
+            );
+            db.exec('COMMIT');
+            return buscarUsuarioPorId(r.lastInsertRowid);
+        } catch (e) {
+            db.exec('ROLLBACK');
+            throw e;
+        }
     }
 
     /** Contar os coordenadores da tabela usuarios. */
