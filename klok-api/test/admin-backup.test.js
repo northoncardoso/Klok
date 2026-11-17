@@ -40,7 +40,7 @@ test('backup baixa arquivo SQLite legível', async (t) => {
     writeFileSync(caminho, bytes);
     const copia = criarBanco(caminho, { empresa: 'TESTE' });
     t.after(() => copia.db.close());
-    assert.equal(copia.listarFuncionarios().length, 1);
+    assert.equal(copia.listarFuncionarios().length, 2, "a Ana mais o coordenador, que também é funcionário");
     assert.equal(copia.listarTodosPontos().length, 1);
 });
 
@@ -54,7 +54,7 @@ test('restaura backup e recusa arquivo inválido', async (t) => {
     );
 
     s.banco.apagarFuncionario(funcionarioId);
-    assert.equal(s.banco.listarFuncionarios().length, 0);
+    assert.equal(s.banco.listarFuncionarios().length, 1, "só o coordenador sobrou");
 
     const restaurado = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco/restaurar`, {
         method: 'POST',
@@ -66,7 +66,7 @@ test('restaura backup e recusa arquivo inválido', async (t) => {
         body: backup,
     });
     assert.equal(restaurado.status, 200);
-    assert.equal(s.gerenciador.abrir('TESTE').banco.listarFuncionarios().length, 1);
+    assert.equal(s.gerenciador.abrir('TESTE').banco.listarFuncionarios().length, 2);
 
     const invalido = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco/restaurar`, {
         method: 'POST',
@@ -78,7 +78,7 @@ test('restaura backup e recusa arquivo inválido', async (t) => {
         body: Buffer.from('não é sqlite'),
     });
     assert.equal(invalido.status, 400);
-    assert.equal(s.gerenciador.abrir('TESTE').banco.listarFuncionarios().length, 1);
+    assert.equal(s.gerenciador.abrir('TESTE').banco.listarFuncionarios().length, 2);
 
     const semConfirmacao = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/banco/restaurar`, {
         method: 'POST',
@@ -119,7 +119,7 @@ test('falha na troca do arquivo mantém o banco anterior no lugar', async (t) =>
     // O banco atual fica sem a Ana, mas o backup tem a Ana. Assim, se a troca
     // acontecesse mesmo com a falha, o teste veria 1 funcionário e falharia.
     s.banco.apagarFuncionario(funcionarioId);
-    assert.equal(s.banco.listarFuncionarios().length, 0);
+    assert.equal(s.banco.listarFuncionarios().length, 1, "só o coordenador sobrou");
 
     // Injeta a falha exatamente na janela perigosa: depois de fechar a conexão
     // e antes de o arquivo novo ocupar o lugar. Com um diretório no caminho do
@@ -150,14 +150,14 @@ test('falha na troca do arquivo mantém o banco anterior no lugar', async (t) =>
     const depois = criarBanco(caminho, { empresa: 'TESTE' });
     t.after(() => depois.db.close());
     // Zero funcionário prova que o arquivo em disco é o anterior, não o backup.
-    assert.equal(depois.listarFuncionarios().length, 0);
+    assert.equal(depois.listarFuncionarios().length, 1, "só o coordenador ficou no arquivo anterior");
     assert.equal(depois.listarTodosPontos().length, 0);
 });
 
 test('recusa SQLite válido que não é banco de empresa', async (t) => {
     const { s, cabecalhos } = await preparar(t);
     const funcionarioId = s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
-    assert.equal(s.banco.listarFuncionarios().length, 1);
+    assert.equal(s.banco.listarFuncionarios().length, 2);
 
     // Um SQLite legítimo, com a versão de migração na faixa esperada, mas sem
     // as tabelas da empresa. Sem a conferência de tabelas isso passaria e a
@@ -182,7 +182,7 @@ test('recusa SQLite válido que não é banco de empresa', async (t) => {
 
     // O banco da empresa continua o mesmo, com a Ana no lugar.
     const aberto = s.gerenciador.abrir('TESTE');
-    assert.equal(aberto.banco.listarFuncionarios().length, 1);
+    assert.equal(aberto.banco.listarFuncionarios().length, 2);
     assert.equal(aberto.banco.buscarFuncionario(funcionarioId).nome, 'Ana');
 });
 
@@ -210,5 +210,5 @@ test('restaura sobre banco ilegível e devolve a empresa ao ar', async (t) => {
         body: backup,
     });
     assert.equal(resp.status, 200);
-    assert.equal(s.gerenciador.abrir('TESTE').banco.listarFuncionarios().length, 1);
+    assert.equal(s.gerenciador.abrir('TESTE').banco.listarFuncionarios().length, 2);
 });

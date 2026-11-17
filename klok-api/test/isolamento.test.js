@@ -35,12 +35,14 @@ test('login exige empresa e não aceita empresa errada', async (t) => {
 test('token da empresa A não abre dados da empresa B', async (t) => {
     const s = await iniciarApp({ segundaEmpresa: true });
     t.after(() => s.fechar());
+    s.banco.criarFuncionario('Ana', '1', 'ana@teste.com');
     const tokenA = await logar(s.baseUrl, 'coordenador', 'senha-coordenador-teste', 'TESTE');
     const resp = await fetch(`${s.baseUrl}/api/funcionarios`, {
         headers: { authorization: `Bearer ${tokenA}` },
     });
     assert.equal(resp.status, 200);
-    assert.equal((await resp.json()).length, 0);
+    const listaA = (await resp.json()).map((f) => f.nome);
+    assert.ok(listaA.includes('Ana'), 'a empresa A enxerga a própria funcionária');
 
     const tokenB = await logar(s.baseUrl, 'coordenador', 'senha-coordenador-teste', 'OUTRA');
     const listaB = await (
@@ -48,7 +50,7 @@ test('token da empresa A não abre dados da empresa B', async (t) => {
             headers: { authorization: `Bearer ${tokenB}` },
         })
     ).json();
-    assert.equal(listaB.length, 0);
+    assert.ok(!listaB.some((f) => f.nome === 'Ana'), 'a empresa B não enxerga a funcionária da A');
 });
 
 test('token de admin não entra em rota de empresa', async (t) => {

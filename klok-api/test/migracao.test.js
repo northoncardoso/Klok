@@ -140,3 +140,27 @@ test('migração 8 cria solicitacoes com índices parciais', () => {
     banco.db.close();
     rmSync(dir, { recursive: true, force: true });
 });
+
+test('coordenador antigo ganha funcionário vinculado na migração', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'klok-migra-coordenador-'));
+    const caminho = join(dir, 'klok.db');
+    const bruto = new DatabaseSync(caminho);
+    for (const migracao of MIGRACOES.slice(0, 8)) bruto.exec(migracao.sql);
+    bruto.exec('PRAGMA user_version = 8');
+    bruto.exec(
+        "INSERT INTO usuarios (usuario, senhaHash, tipo, nome, numero, email) VALUES ('chefe', 'hash', 'coordenador', 'Chefe Antigo', '1199', 'chefe@teste.com')"
+    );
+    bruto.exec("INSERT INTO funcionarios (nome, numero, email) VALUES ('Ja Existia', '', '')");
+    bruto.close();
+
+    const banco = criarBanco(caminho);
+    const chefe = banco.buscarUsuarioPorLogin('chefe');
+    assert.ok(chefe.funcionarioId, 'coordenador migrado precisa de funcionarioId');
+    const funcionario = banco.buscarFuncionario(Number(chefe.funcionarioId));
+    assert.equal(funcionario.nome, 'Chefe Antigo');
+    assert.equal(funcionario.numero, '1199');
+    assert.equal(funcionario.email, 'chefe@teste.com');
+    assert.equal(banco.listarFuncionarios().length, 2, 'o funcionário que já existia continua');
+    banco.db.close();
+    rmSync(dir, { recursive: true, force: true });
+});

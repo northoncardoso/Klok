@@ -99,3 +99,17 @@ test('apagar funcionário inexistente retorna 404', async (t) => {
     });
     assert.equal(resp.status, 404);
 });
+test('apagar funcionário de coordenador devolve 409', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    const token = await logar(s.baseUrl, 'coordenador', COORDENADOR_SENHA);
+    const funcionarioId = Number(s.banco.buscarUsuarioPorLogin('coordenador').funcionarioId);
+
+    const resp = await fetch(`${s.baseUrl}/api/funcionarios/${funcionarioId}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(resp.status, 409);
+    assert.match((await resp.json()).erro, /coordenador/i);
+    assert.ok(s.banco.buscarUsuarioPorLogin('coordenador'), 'a conta continua de pé');
+});

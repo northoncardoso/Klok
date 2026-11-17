@@ -25,7 +25,7 @@ test('resumo conta só o banco da empresa', (t) => {
     banco.criarSolicitacao({ usuario: 'bia', nome: 'Bia', email: 'bia@teste.com' });
 
     const r = banco.resumo();
-    assert.equal(r.funcionarios, 1);
+    assert.equal(r.funcionarios, 2, "a Ana mais o coordenador, que também é funcionário");
     assert.equal(r.coordenadores, 1);
     assert.equal(r.pontos, 2);
     assert.equal(r.solicitacoesPendentes, 1);

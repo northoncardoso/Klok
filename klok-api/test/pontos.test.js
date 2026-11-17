@@ -62,9 +62,33 @@ test('coordenador vê pontos de todos com nome do funcionario', async (t) => {
     assert.ok(todos.some((p) => p.funcionarioNome === 'ponto2'));
 });
 
-test('coordenador sem funcionário vinculado não consegue bater ponto', async (t) => {
+test('coordenador bate ponto como qualquer funcionário', async (t) => {
     const s = await iniciarApp();
     t.after(() => s.fechar());
+    const token = await logar(s.baseUrl, 'coordenador', COORDENADOR_SENHA);
+
+    const resp = await fetch(`${s.baseUrl}/api/pontos`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tipo: 'batida' }),
+    });
+    assert.equal(resp.status, 201);
+    const ponto = await resp.json();
+    assert.ok(ponto.funcionarioId, 'a batida precisa estar ligada a um funcionário');
+
+    const meus = await fetch(`${s.baseUrl}/api/pontos/meus`, {
+        headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(meus.status, 200);
+    assert.equal((await meus.json()).length, 1);
+});
+
+test('usuário sem funcionário vinculado continua recusado', async (t) => {
+    const s = await iniciarApp();
+    t.after(() => s.fechar());
+    // Linha legada, anterior ao vínculo obrigatório: o guard do controlador
+    // continua valendo para banco que não passou pela migração.
+    s.banco.db.prepare('UPDATE usuarios SET funcionarioId = NULL WHERE usuario = ?').run('coordenador');
     const token = await logar(s.baseUrl, 'coordenador', COORDENADOR_SENHA);
 
     const resp = await fetch(`${s.baseUrl}/api/pontos`, {

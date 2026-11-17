@@ -114,6 +114,33 @@ export const MIGRACOES = [
             CREATE INDEX IF NOT EXISTS idx_solicitacoes_status ON solicitacoes(status);
         `,
     },
+    {
+        versao: 9,
+        nome: 'coordenador também é funcionário e bate ponto',
+        sql: `
+            CREATE TEMP TABLE migracao_coordenador AS
+            SELECT u.id AS usuarioId,
+                   (SELECT COALESCE(MAX(f.id), 0) FROM funcionarios f)
+                       + ROW_NUMBER() OVER (ORDER BY u.id) AS funcionarioId,
+                   COALESCE(u.nome, '') AS nome,
+                   COALESCE(u.numero, '') AS numero,
+                   COALESCE(u.email, '') AS email
+            FROM usuarios u
+            WHERE u.tipo = 'coordenador' AND u.funcionarioId IS NULL;
+
+            INSERT INTO funcionarios (id, nome, numero, email)
+            SELECT funcionarioId, nome, numero, email FROM migracao_coordenador
+            ORDER BY funcionarioId;
+
+            UPDATE usuarios
+            SET funcionarioId = (
+                SELECT m.funcionarioId FROM migracao_coordenador m WHERE m.usuarioId = usuarios.id
+            )
+            WHERE id IN (SELECT usuarioId FROM migracao_coordenador);
+
+            DROP TABLE migracao_coordenador;
+        `,
+    },
 ];
 
 /**
@@ -158,22 +185,40 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     /**
      * Inserir um coordenador na tabela usuarios, com o código da empresa e a senha em hash scrypt.
      *
+     * O coordenador também é uma pessoa da empresa, então nasce com um registro
+     * em `funcionarios` vinculado, o que permite bater ponto. A transação evita
+     * funcionário órfão quando o nome de usuário já existe.
+     *
      * @returns {object|undefined} A linha do coordenador recém criado.
      */
     function criarCoordenador(usuario, senha, nome, email, numero) {
-        const r = db.prepare(
-            `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, nome, numero, email, empresa)
-             VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`
-        ).run(
-            paraTexto(usuario),
-            criarHashSenha(senha),
-            PAPEL_COORDENADOR,
-            paraTexto(nome),
-            paraTexto(numero),
-            paraTexto(email),
-            empresa
-        );
-        return buscarUsuarioPorId(r.lastInsertRowid);
+        const nomeLimpo = paraTexto(nome);
+        const numeroLimpo = paraTexto(numero);
+        const emailLimpo = paraTexto(email);
+        db.exec('BEGIN');
+        try {
+            const funcionario = db
+                .prepare('INSERT INTO funcionarios (nome, numero, email) VALUES (?, ?, ?)')
+                .run(nomeLimpo, numeroLimpo, emailLimpo);
+            const r = db.prepare(
+                `INSERT INTO usuarios (usuario, senhaHash, tipo, funcionarioId, nome, numero, email, empresa)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(
+                paraTexto(usuario),
+                criarHashSenha(senha),
+                PAPEL_COORDENADOR,
+                funcionario.lastInsertRowid,
+                nomeLimpo,
+                numeroLimpo,
+                emailLimpo,
+                empresa
+            );
+            db.exec('COMMIT');
+            return buscarUsuarioPorId(r.lastInsertRowid);
+        } catch (e) {
+            db.exec('ROLLBACK');
+            throw e;
+        }
     }
 
     /** Contar os coordenadores da tabela usuarios. */
@@ -219,11 +264,30 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         return db.prepare('SELECT * FROM funcionarios WHERE id = ?').get(id);
     }
 
-    /** Sobrescrever nome, número e email de um funcionário na tabela funcionarios. */
+    /**
+     * Sobrescrever nome, número e email de um funcionário na tabela funcionarios.
+     *
+     * Quando o funcionário é um coordenador, o mesmo dado é copiado para a linha
+     * de `usuarios`, para a aba de funcionários e a de coordenadores não
+     * mostrarem valores diferentes.
+     */
     function atualizarFuncionario(id, nome, numero, email) {
-        db.prepare(
-            'UPDATE funcionarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
-        ).run(paraTexto(nome), paraTexto(numero), paraTexto(email), id);
+        const nomeLimpo = paraTexto(nome);
+        const numeroLimpo = paraTexto(numero);
+        const emailLimpo = paraTexto(email);
+        db.exec('BEGIN');
+        try {
+            db.prepare(
+                'UPDATE funcionarios SET nome = ?, numero = ?, email = ? WHERE id = ?'
+            ).run(nomeLimpo, numeroLimpo, emailLimpo, id);
+            db.prepare(
+                'UPDATE usuarios SET nome = ?, numero = ?, email = ? WHERE funcionarioId = ?'
+            ).run(nomeLimpo, numeroLimpo, emailLimpo, id);
+            db.exec('COMMIT');
+        } catch (e) {
+            db.exec('ROLLBACK');
+            throw e;
+        }
     }
 
     /**
@@ -257,16 +321,27 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     /**
      * Apagar um funcionário junto com os pontos e o usuário dele, tudo em uma transação.
      *
-     * @returns {boolean} Verdadeiro quando a linha do funcionário existia.
+     * A conta de coordenador não pode ser apagada por aqui: ela existe na aba de
+     * coordenadores, e a lista de funcionários mostra o coordenador como pessoa
+     * da empresa. Sem esse guard, excluir o funcionário derrubaria o login dele.
+     *
+     * @returns {{apagou: boolean, motivo: string|null}} `motivo` é 'coordenador'
+     * quando a exclusão foi recusada, ou null nos demais casos.
      */
     function apagarFuncionario(id) {
+        const ligado = db
+            .prepare('SELECT tipo FROM usuarios WHERE funcionarioId = ? LIMIT 1')
+            .get(id);
+        if (ligado?.tipo === PAPEL_COORDENADOR) {
+            return { apagou: false, motivo: 'coordenador' };
+        }
         db.exec('BEGIN');
         try {
             db.prepare('DELETE FROM pontos WHERE funcionarioId = ?').run(id);
             db.prepare('DELETE FROM usuarios WHERE funcionarioId = ?').run(id);
             const r = db.prepare('DELETE FROM funcionarios WHERE id = ?').run(id);
             db.exec('COMMIT');
-            return r.changes > 0;
+            return { apagou: r.changes > 0, motivo: null };
         } catch (e) {
             db.exec('ROLLBACK');
             throw e;
