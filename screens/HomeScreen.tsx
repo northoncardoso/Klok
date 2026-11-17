@@ -25,10 +25,15 @@ GoogleSignin.configure({
     offlineAccess: false,
 });
 
+/** Padronizar o código da empresa: tirar espaços nas pontas e passar para maiúsculas. */
 function codigoDaEmpresa(valor: string): string {
     return valor.trim().toUpperCase();
 }
 
+/**
+ * Mostrar a tela de entrada com login local, login Google, cadastro de pedido e recuperação de senha.
+ * Recebe a prop aoEntrar, chamada com a sessão devolvida pela API quando o login dá certo.
+ */
 export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
     const [empresa, setEmpresa] = useState('');
     const [usuario, setUsuario] = useState('');
@@ -43,6 +48,9 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         lerEmpresa().then(setEmpresa).catch(() => setEmpresa(''));
     }, []);
 
+    /**
+     * Devolver o código da empresa normalizado ou null, avisando por Alert quando o campo está vazio.
+     */
     const empresaPreenchida = (): string | null => {
         const codigo = codigoDaEmpresa(empresa);
         if (!codigo) {
@@ -52,6 +60,12 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         return codigo;
     };
 
+    /**
+     * Conferir usuário, senha e código da empresa e chamar POST /api/auth/login.
+     * Enquanto carrega, o botão fica desabilitado com o texto "Entrando...", o que barra toque duplo.
+     * Ao dar certo, grava a sessão no aparelho e chama aoEntrar. Se falhar, o Alert mostra a mensagem
+     * do servidor, inclusive o caso de pedido ainda pendente de aprovação.
+     */
     const entrar = async () => {
         if (!usuario.trim() || !senha.trim()) {
             Alert.alert('Atenção', 'Preencha usuário e senha.');
@@ -72,6 +86,12 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         }
     };
 
+    /**
+     * Conferir os campos e enviar POST /api/auth/registrar, que cria um pedido pendente de aprovação.
+     * Enquanto carrega, o botão fica desabilitado com o texto "Cadastrando...", barrando toque duplo.
+     * Ao dar certo, um Alert pede para aguardar o coordenador e a tela volta ao modo de login.
+     * Se falhar, o Alert traz a mensagem do servidor e o formulário continua preenchido.
+     */
     const cadastrar = async () => {
         if (!usuario.trim() || !senha.trim()) {
             Alert.alert('Atenção', 'Preencha usuário e senha.');
@@ -103,6 +123,12 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         }
     };
 
+    /**
+     * Abrir o fluxo do Google, exigir Play Services e enviar o idToken para POST /api/auth/google.
+     * Enquanto carrega, o botão fica desabilitado, o que barra toque duplo.
+     * O cancelamento do usuário fica silencioso; falta de Play Services, idToken ausente e erro da API
+     * aparecem por Alert. Quando dá certo, grava a sessão no aparelho e chama aoEntrar.
+     */
     const entrarComGoogle = async () => {
         const codigo = empresaPreenchida();
         if (!codigo) return;
@@ -135,6 +161,10 @@ export default function HomeScreen({ aoEntrar }: HomeScreenProps) {
         }
     };
 
+    /**
+     * Conferir o código da empresa, gravá-lo no aparelho e abrir o formulário de recuperação de senha.
+     * A falha da gravação é ignorada de propósito, porque o formulário tem o próprio aviso de erro.
+     */
     const abrirRecuperacao = () => {
         const codigo = empresaPreenchida();
         if (!codigo) return;

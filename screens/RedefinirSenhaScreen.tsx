@@ -11,11 +11,22 @@ type RedefinirSenhaScreenProps = {
     aoConcluir: () => void;
 };
 
+/**
+ * Permitir que quem abriu o link de recuperação defina uma nova senha.
+ * Recebe empresa, usada na chamada; token, o token vindo do link; e aoConcluir, chamado
+ * para voltar ao login depois do sucesso.
+ */
 export default function RedefinirSenhaScreen({ empresa, token, aoConcluir }: RedefinirSenhaScreenProps) {
     const [senhaNova, setSenhaNova] = useState('');
     const [confirmar, setConfirmar] = useState('');
     const [salvando, setSalvando] = useState(false);
 
+    /**
+     * Conferir os dois campos e chamar a rota de redefinir senha com a nova senha.
+     * Enquanto salva, o botão fica desabilitado com o texto "Salvando...", barrando toque duplo.
+     * Ao dar certo, um Alert pede login com a senha nova e chama aoConcluir. Se falhar, o Alert
+     * traz a mensagem do servidor, como link expirado ou token inválido.
+     */
     const enviar = async () => {
         if (!senhaNova || !confirmar) {
             Alert.alert('Atenção', 'Preencha os dois campos.');

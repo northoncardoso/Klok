@@ -21,6 +21,11 @@ type UsuarioScreenProps = {
     aoAtualizarNome?: (nome: string) => void;
 };
 
+/**
+ * Mostrar e editar os dados do usuário logado, além da troca e da recuperação de senha.
+ * Recebe token, usado como credencial; e aoAtualizarNome, opcional, chamada com o novo nome
+ * para o cabeçalho do app acompanhar a alteração.
+ */
 export default function UsuarioScreen({ token, aoAtualizarNome }: UsuarioScreenProps) {
     const [dados, setDados] = useState<UsuarioInfo | null>(null);
     const [carregando, setCarregando] = useState(true);
@@ -37,6 +42,11 @@ export default function UsuarioScreen({ token, aoAtualizarNome }: UsuarioScreenP
     const [senhaConfirmar, setSenhaConfirmar] = useState('');
     const [salvandoSenha, setSalvandoSenha] = useState(false);
 
+    /**
+     * Buscar em GET /api/auth/eu os dados do usuário e preencher os campos do formulário.
+     * Enquanto busca, a tela mostra apenas o indicador de carregamento. Se falhar, o Alert
+     * mostra a mensagem do servidor.
+     */
     const carregar = async () => {
         setCarregando(true);
         try {
@@ -56,6 +66,12 @@ export default function UsuarioScreen({ token, aoAtualizarNome }: UsuarioScreenP
         carregar();
     }, [token]);
 
+    /**
+     * Conferir o nome e enviar PUT em /api/auth/eu com nome, número e email.
+     * Enquanto salva, o botão fica desabilitado com o texto "Salvando...", barrando toque duplo.
+     * Ao dar certo, atualiza o estado, avisa aoAtualizarNome e mostra um Alert de sucesso.
+     * Se falhar, o Alert traz a mensagem do servidor e os campos continuam preenchidos.
+     */
     const salvarDados = async () => {
         if (!nome.trim()) {
             Alert.alert('Atenção', 'Informe o nome.');
@@ -74,6 +90,9 @@ export default function UsuarioScreen({ token, aoAtualizarNome }: UsuarioScreenP
         }
     };
 
+    /**
+     * Fechar o modal de senha e limpar os três campos, incluindo a volta ao formulário de troca.
+     */
     const fecharModalSenha = () => {
         setModalSenhaVisivel(false);
         setMostrandoEsqueciSenha(false);
@@ -82,6 +101,12 @@ export default function UsuarioScreen({ token, aoAtualizarNome }: UsuarioScreenP
         setSenhaConfirmar('');
     };
 
+    /**
+     * Conferir os três campos e enviar PUT em /api/auth/senha com a senha atual e a nova.
+     * Enquanto salva, o botão fica desabilitado com o texto "Salvando...", barrando toque duplo.
+     * Ao dar certo, fecha o modal e mostra um Alert de sucesso. Se falhar, o Alert mostra a mensagem
+     * do servidor, como senha atual incorreta.
+     */
     const salvarSenha = async () => {
         if (!senhaAtual || !senhaNova || !senhaConfirmar) {
             Alert.alert('Atenção', 'Preencha todos os campos.');

@@ -101,6 +101,11 @@ const SOLICITACOES = [
     ['UMBRELLA', 'wagner.paiva', 'Wagner Paiva', 'wagner.paiva@email.com', '(41) 90000-0009', 'pendente', 4, null],
 ];
 
+/**
+ * Montar a lista dos últimos dias úteis, de segunda a sexta, em UTC.
+ * @param {number} quantidade quantos dias úteis devolver
+ * @returns {Array} datas em ordem cronológica, da mais antiga para a mais recente
+ */
 function diasUteis(quantidade) {
     const dias = [];
     for (let i = 0; dias.length < quantidade && i < 90; i++) {
@@ -114,6 +119,11 @@ function diasUteis(quantidade) {
 
 const DIAS = diasUteis(25);
 
+/**
+ * Garantir a tabela de solicitações no banco da empresa, aplicando a migração 8 quando ela faltar.
+ * Se o banco já estiver na versão 8 ou acima, não faz nada.
+ * @param {object} banco instância devolvida por criarBanco
+ */
 function garantirSolicitacoes(banco) {
     if (banco.userVersion() >= 8) return;
     banco.db.exec('BEGIN');
@@ -145,11 +155,24 @@ function garantirSolicitacoes(banco) {
     }
 }
 
+/**
+ * Montar o instante em ISO a partir de quantos dias atrás e do horário de Brasília.
+ * @param {number} diasAtras dias a recuar a partir de hoje
+ * @param {number} hora hora cheia já convertida para UTC
+ * @param {number} minuto minuto exato
+ * @returns {string} data em formato ISO
+ */
 function dataIso(diasAtras, hora, minuto) {
     const dia = new Date(Date.UTC(HOJE.getUTCFullYear(), HOJE.getUTCMonth(), HOJE.getUTCDate() - diasAtras));
     return new Date(Date.UTC(dia.getUTCFullYear(), dia.getUTCMonth(), dia.getUTCDate(), hora + 3, minuto)).toISOString();
 }
 
+/**
+ * Criar o banco de uma empresa de exemplo.
+ * Grava coordenadores, funcionários, pontos dos últimos dias úteis e solicitações pendentes ou já decididas. A senha de exemplo de todos os usuários é senha123, e o último funcionário de cada empresa fica sem usuário para praticar LEFT JOIN.
+ * Sem --recriar, um banco que já existe é mantido e apenas ignorado. Com --recriar, os arquivos do banco são apagados antes de tudo, inclusive os auxiliares de WAL e de memória compartilhada.
+ * @param {object} empresa item de EMPRESAS com código, nome, ativa, coordenadores e funcionários
+ */
 function semearEmpresa(empresa) {
     const caminho = join(dadosDir, `${empresa.codigo}.db`);
     if (existsSync(caminho) && !recriar) {

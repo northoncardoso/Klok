@@ -18,6 +18,10 @@ type FuncionariosScreenProps = {
     token: string;
 };
 
+/**
+ * Exibir a lista de funcionários com busca por nome, número ou email, mais o modal de cadastro.
+ * Recebe a prop token, usada como credencial em todas as chamadas à API.
+ */
 export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
     const [modalVisivel, setModalVisivel] = useState(false);
     const [nomeNovo, setNomeNovo] = useState('');
@@ -30,6 +34,10 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
         carregarFuncionarios();
     }, [token]);
 
+    /**
+     * Buscar em GET /api/funcionarios a lista completa e guardar no estado.
+     * Se falhar, mostra um Alert com a mensagem do servidor e mantém a lista anterior.
+     */
     const carregarFuncionarios = async () => {
         try {
             const lista = await api.listarFuncionarios(token);
@@ -39,6 +47,11 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
         }
     };
 
+    /**
+     * Enviar POST /api/funcionarios com nome, número e email, usando um nome padrão quando o campo vem vazio.
+     * Ao concluir, recarrega a lista, fecha o modal e limpa os campos. Se der erro, o Alert mostra a mensagem
+     * do servidor e o modal continua aberto. O botão não tem estado de carregando, então não bloqueia toque duplo.
+     */
     const confirmarNovoFuncionario = async () => {
         const nome = nomeNovo.trim() || 'Nome do funcionario';
         const numero = numeroNovo.trim();
@@ -55,6 +68,10 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
         }
     };
 
+    /**
+     * Apagar o funcionário pelo id com DELETE em /api/funcionarios/{id} e recarregar a lista.
+     * Se falhar, mostra um Alert com a mensagem do servidor e a lista segue como estava.
+     */
     const deletarFuncionario = async (id: number) => {
         try {
             await api.deletarFuncionario(id, token);
@@ -64,6 +81,10 @@ export default function FuncionariosScreen({ token }: FuncionariosScreenProps) {
         }
     };
 
+    /**
+     * Salvar as alterações do funcionário com PUT em /api/funcionarios/{id} e recarregar a lista.
+     * Se falhar, mostra um Alert com a mensagem do servidor e o cartão volta ao valor anterior.
+     */
     const editarFuncionario = async (id: number, nome: string, numero: string, email: string) => {
         try {
             await api.atualizarFuncionario(id, { nome, numero, email }, token);

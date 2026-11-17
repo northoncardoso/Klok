@@ -10,6 +10,11 @@ type FormularioRecuperarSenhaProps = {
     onEnviado?: () => void;
 };
 
+/**
+ * Pedir o email do usuário e solicitar o link de recuperação de senha.
+ * Recebe empresa, o código usado na chamada; onVoltar, chamado para fechar o formulário;
+ * e onEnviado, opcional, executado quando o pedido é aceito, com queda para onVoltar.
+ */
 export default function FormularioRecuperarSenha({
     empresa,
     onVoltar,
@@ -18,6 +23,12 @@ export default function FormularioRecuperarSenha({
     const [email, setEmail] = useState('');
     const [enviando, setEnviando] = useState(false);
 
+    /**
+     * Conferir email e empresa e chamar a rota de esqueci senha em POST.
+     * Enquanto envia, o botão fica desabilitado com o texto "Enviando...", barrando toque duplo.
+     * Ao dar certo, um Alert avisa que o link foi enviado e a tela é fechada. Se falhar, o Alert
+     * traz a mensagem do servidor e o formulário continua preenchido.
+     */
     const enviar = async () => {
         if (!email.trim()) {
             Alert.alert('Atenção', 'Informe seu email.');

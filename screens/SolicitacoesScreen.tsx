@@ -12,11 +12,19 @@ type Props = {
 
 type Acao = 'aprovar' | 'recusar';
 
+/**
+ * Listar os pedidos de cadastro pendentes e deixar o coordenador aprovar ou recusar cada um.
+ * Recebe token, usado como credencial; e aoAtualizarContagem, chamada para refrescar o contador do menu.
+ */
 export default function SolicitacoesScreen({ token, aoAtualizarContagem }: Props) {
     const [lista, setLista] = useState<Solicitacao[]>([]);
     const [carregando, setCarregando] = useState(false);
     const [agindo, setAgindo] = useState<number | null>(null);
 
+    /**
+     * Buscar em GET /api/solicitacoes, filtrando por status pendente, e guardar no estado.
+     * Enquanto busca, o botão de atualizar mostra "Atualizando...". Se falhar, um Alert mostra a mensagem.
+     */
     const carregar = async () => {
         setCarregando(true);
         try {
@@ -32,6 +40,9 @@ export default function SolicitacoesScreen({ token, aoAtualizarContagem }: Props
         carregar();
     }, [token]);
 
+    /**
+     * Chamar o contador do menu e engolir a falha, porque a decisão já foi tomada e não pode ficar escondida.
+     */
     const atualizarContagem = async () => {
         try {
             await aoAtualizarContagem();
@@ -41,6 +52,12 @@ export default function SolicitacoesScreen({ token, aoAtualizarContagem }: Props
         }
     };
 
+    /**
+     * Enviar POST para a rota de aprovar ou de recusar do pedido escolhido.
+     * A guarda de agindo barra toque duplo, e todos os botões ficam cinzas e desabilitados durante a ação.
+     * Depois, recarrega a lista e a contagem mesmo quando dá erro, para refletir o estado real.
+     * Se falhar, o Alert mostra a mensagem do servidor, como pedido já decidido por outro coordenador.
+     */
     const agir = async (id: number, acao: Acao) => {
         if (agindo !== null) return;
         setAgindo(id);
@@ -58,6 +75,9 @@ export default function SolicitacoesScreen({ token, aoAtualizarContagem }: Props
         }
     };
 
+    /**
+     * Abrir um Alert de confirmação com o nome do solicitante antes de decidir o pedido.
+     */
     const confirmar = (pedido: Solicitacao, acao: Acao) => {
         const titulo = acao === 'aprovar' ? 'Aprovar pedido' : 'Recusar pedido';
         const texto =
