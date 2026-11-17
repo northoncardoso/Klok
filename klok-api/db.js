@@ -114,6 +114,33 @@ export const MIGRACOES = [
             CREATE INDEX IF NOT EXISTS idx_solicitacoes_status ON solicitacoes(status);
         `,
     },
+    {
+        versao: 9,
+        nome: 'coordenador também é funcionário e bate ponto',
+        sql: `
+            CREATE TEMP TABLE migracao_coordenador AS
+            SELECT u.id AS usuarioId,
+                   (SELECT COALESCE(MAX(f.id), 0) FROM funcionarios f)
+                       + ROW_NUMBER() OVER (ORDER BY u.id) AS funcionarioId,
+                   COALESCE(u.nome, '') AS nome,
+                   COALESCE(u.numero, '') AS numero,
+                   COALESCE(u.email, '') AS email
+            FROM usuarios u
+            WHERE u.tipo = 'coordenador' AND u.funcionarioId IS NULL;
+
+            INSERT INTO funcionarios (id, nome, numero, email)
+            SELECT funcionarioId, nome, numero, email FROM migracao_coordenador
+            ORDER BY funcionarioId;
+
+            UPDATE usuarios
+            SET funcionarioId = (
+                SELECT m.funcionarioId FROM migracao_coordenador m WHERE m.usuarioId = usuarios.id
+            )
+            WHERE id IN (SELECT usuarioId FROM migracao_coordenador);
+
+            DROP TABLE migracao_coordenador;
+        `,
+    },
 ];
 
 /**
