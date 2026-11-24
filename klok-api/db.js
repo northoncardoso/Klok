@@ -498,15 +498,17 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     /** Listar os pontos de um funcionário da tabela pontos, do mais recente para o mais antigo. */
     function listarPontos(funcionarioId) {
         return db.prepare(
-            'SELECT * FROM pontos WHERE funcionarioId = ? ORDER BY dataHora DESC'
+            `SELECT id, funcionarioId, dataHora, tipo
+             FROM pontos WHERE funcionarioId = ? ORDER BY dataHora DESC`
         ).all(funcionarioId);
     }
 
-    /** Listar todos os pontos com o nome do funcionário, do mais recente para o mais antigo. */
+    /** Listar todos os pontos com o nome do funcionário e a situação do perímetro. */
     function listarTodosPontos() {
         return db.prepare(
-            `SELECT p.*, f.nome AS funcionarioNome
+            `SELECT p.*, f.nome AS funcionarioNome, l.nome AS localNome
              FROM pontos p JOIN funcionarios f ON f.id = p.funcionarioId
+             LEFT JOIN locais l ON l.id = p.localId
              ORDER BY p.dataHora DESC`
         ).all();
     }

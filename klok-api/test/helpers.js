@@ -21,6 +21,13 @@ export const COORDENADOR = {
 
 export const COORDENADOR_SENHA = COORDENADOR.senha;
 
+export const LOCAL = {
+    nome: 'Sede',
+    latitude: -23.5505,
+    longitude: -46.6333,
+    raioMetros: 150,
+};
+
 export const ADMIN = {
     usuario: 'root',
     senha: 'senha-admin-teste',
@@ -53,6 +60,12 @@ export async function iniciarApp(opcoes = {}) {
     if (opcoes.comCoordenador !== false) {
         semearCoordenador(banco);
         if (opcoes.segundaEmpresa) semearCoordenador(gerenciador.abrir(OUTRA_EMPRESA).banco);
+    }
+    if (!opcoes.semLocal) {
+        banco.criarLocal(LOCAL);
+        if (opcoes.segundaEmpresa) {
+            gerenciador.abrir(OUTRA_EMPRESA).banco.criarLocal(LOCAL);
+        }
     }
 
     const clienteGoogle =

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { apurarPerimetro, distanciaEmMetros } from '../geolocalizacao.js';
+import { apurarPerimetro, distanciaEmMetros, lerCoordenada, RAIO_MAXIMO, RAIO_MINIMO } from '../geolocalizacao.js';
 
 const SAO_PAULO = { latitude: -23.5505, longitude: -46.6333 };
 const RIO = { latitude: -22.9068, longitude: -43.1729 };
@@ -84,4 +84,29 @@ test('apuração com coordenada inválida devolve nulo', () => {
     assert.equal(apurarPerimetro([local], { latitude: null, longitude: -46.6 }), null);
     assert.equal(apurarPerimetro([local], { latitude: 120, longitude: -46.6 }), null);
     assert.equal(apurarPerimetro([local], null), null);
+});
+
+test('lerCoordenada aceita ausência total e normaliza a precisão', () => {
+    assert.deepEqual(lerCoordenada({}), { coordenada: null });
+    assert.deepEqual(lerCoordenada({ latitude: null, longitude: null }), { coordenada: null });
+
+    const { coordenada } = lerCoordenada({ latitude: -23.5, longitude: -46.6 });
+    assert.equal(coordenada.precisaoMetros, 0);
+
+    const negativa = lerCoordenada({ latitude: -23.5, longitude: -46.6, precisaoMetros: -10 });
+    assert.equal(negativa.coordenada.precisaoMetros, 0, 'precisão negativa vira zero');
+});
+
+test('lerCoordenada recusa coordenada incompleta, fora da faixa ou textual', () => {
+    assert.ok(lerCoordenada({ latitude: -23.5 }).erro);
+    assert.ok(lerCoordenada({ longitude: -46.6 }).erro);
+    assert.ok(lerCoordenada({ latitude: 200, longitude: -46.6 }).erro);
+    assert.ok(lerCoordenada({ latitude: -23.5, longitude: 200 }).erro);
+    assert.ok(lerCoordenada({ latitude: 'abc', longitude: -46.6 }).erro);
+    assert.ok(lerCoordenada({ latitude: -23.5, longitude: -46.6, precisaoMetros: 'x' }).erro);
+});
+
+test('faixa de raio vai de 100 a 150 metros', () => {
+    assert.equal(RAIO_MINIMO, 100);
+    assert.equal(RAIO_MAXIMO, 150);
 });

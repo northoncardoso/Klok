@@ -7,6 +7,12 @@
 
 const RAIO_DA_TERRA_EM_METROS = 6371000;
 
+/** Raio mínimo de perímetro aceito, em metros. */
+export const RAIO_MINIMO = 100;
+
+/** Raio máximo de perímetro aceito, em metros. */
+export const RAIO_MAXIMO = 150;
+
 /** Converter graus em radianos. */
 function paraRadianos(graus) {
     return (graus * Math.PI) / 180;
@@ -54,6 +60,53 @@ function precisaoValida(precisao) {
     const numero = Number(precisao);
     if (!Number.isFinite(numero) || numero < 0) return 0;
     return numero;
+}
+
+/**
+ * Indicar se o raio informado está dentro da faixa aceita.
+ *
+ * @param {unknown} raio Raio em metros.
+ * @returns {boolean}
+ */
+export function raioValido(raio) {
+    const numero = Number(raio);
+    return Number.isFinite(numero) && numero >= RAIO_MINIMO && numero <= RAIO_MAXIMO;
+}
+
+/**
+ * Ler a coordenada enviada no corpo da requisição, sem aceitar valor parcial,
+ * textual ou fora da faixa. A ausência completa da coordenada é válida e
+ * significa batida sem verificação.
+ *
+ * @param {object} corpo Corpo da requisição, com latitude, longitude e precisaoMetros.
+ * @returns {{ coordenada: { latitude: number, longitude: number, precisaoMetros: number }|null }|{ erro: string }}
+ */
+export function lerCoordenada(corpo) {
+    const latitude = corpo?.latitude;
+    const longitude = corpo?.longitude;
+    const temLatitude = latitude !== undefined && latitude !== null;
+    const temLongitude = longitude !== undefined && longitude !== null;
+
+    if (!temLatitude && !temLongitude) return { coordenada: null };
+    if (!temLatitude || !temLongitude) {
+        return { erro: 'Latitude e longitude precisam vir juntas' };
+    }
+    if (!grauValido(latitude, 90) || !grauValido(longitude, 180)) {
+        return { erro: 'Coordenada inválida' };
+    }
+
+    const precisao = corpo?.precisaoMetros;
+    if (precisao !== undefined && precisao !== null && !Number.isFinite(Number(precisao))) {
+        return { erro: 'Precisão inválida' };
+    }
+
+    return {
+        coordenada: {
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            precisaoMetros: precisaoValida(precisao),
+        },
+    };
 }
 
 /**
