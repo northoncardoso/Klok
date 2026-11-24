@@ -51,6 +51,9 @@ git.
 - Responder em português (PT-BR), tom direto.
 - Em texto gerado (comentários, docs, mensagens de commit), não usar hífen nem
   travessão. Preferir vírgulas, dois pontos ou frases curtas.
+- Textos publicados no Git (títulos e corpos de issue, mensagens de commit e de
+  PR) devem ser formais, impessoais e técnicos, com voz passiva ou terceira
+  pessoa, sem gírias, sem primeira pessoa e sem expressões coloquiais.
 - Antes de usar qualquer biblioteca ou recurso, conferir se está atual e não foi
   descontinuado.
 
