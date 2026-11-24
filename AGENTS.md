@@ -68,6 +68,8 @@ git.
 - #31: multiempresa parte 2, autocadastro com pedido, aprovação e aviso.
 - #32: multiempresa parte 3, suporte e resumo no painel.
 - #20: limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git).
+- #44: geolocalização na batida de ponto com perímetro por empresa.
+- #45: auditoria de ações administrativas, depois da geolocalização.
 
 ## Programa de trabalho em andamento
 
@@ -102,3 +104,9 @@ Ordem aprovada, cada bloco com seu design e seu plano.
   e apagar funcionário de coordenador devolve 409. Design em
   `docs/superpowers/specs/2026-11-17-coordenador-bate-ponto-design.md` e plano em
   `docs/superpowers/plans/2026-11-17-coordenador-bate-ponto.md`.
+- I. Geolocalização na batida de ponto com perímetro por empresa (#44, blocos
+  #49, #51, #48, #50, #52, #46 e mapa em etapa posterior na #47). Especificação
+  de design em
+  `docs/superpowers/specs/2026-11-24-geolocalizacao-ponto-design.md`. A primeira
+  versão não terá mapa, apenas tabela e ícones na tela de configuração.
+- J. Auditoria de ações administrativas (#45), depois da geolocalização.
