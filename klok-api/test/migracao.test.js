@@ -164,3 +164,31 @@ test('coordenador antigo ganha funcionário vinculado na migração', () => {
     banco.db.close();
     rmSync(dir, { recursive: true, force: true });
 });
+
+test('migração 10 cria locais, pedidos e colunas da batida', () => {
+    const banco = criarBanco(':memory:');
+    assert.equal(banco.userVersion(), 10);
+
+    const tabelas = banco.db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+        .all()
+        .map((t) => t.name);
+    assert.ok(tabelas.includes('locais'));
+    assert.ok(tabelas.includes('pedidos_local'));
+
+    const colunas = banco.db.prepare('PRAGMA table_info(pontos)').all().map((c) => c.name);
+    for (const nome of ['localId', 'dentroPerimetro', 'distanciaMetros', 'precisaoMetros']) {
+        assert.ok(colunas.includes(nome), `pontos precisa da coluna ${nome}`);
+    }
+    banco.db.close();
+});
+
+test('migração 10 preserva pontos existentes', () => {
+    const banco = criarBanco(':memory:');
+    const funcionarioId = banco.criarFuncionario('Antigo');
+    const ponto = banco.baterPonto(funcionarioId, 'batida');
+
+    assert.equal(ponto.dentroPerimetro, null);
+    assert.equal(banco.userVersion(), 10);
+    banco.db.close();
+});
