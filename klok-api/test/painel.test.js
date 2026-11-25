@@ -40,6 +40,8 @@ test('painel tem as seções de suporte', async (t) => {
         'tabela-funcionarios',
         'tabela-pontos',
         'tabela-solicitacoes',
+        'tabela-pedidos-locais',
+        'pedido-local-status',
         'banco-versao',
         'banco-tamanho',
     ]) {
@@ -58,6 +60,8 @@ test('painel tem as ações de suporte', async (t) => {
         'apagarFuncionario',
         'aprovarSolicitacao',
         'recusarSolicitacao',
+        'aprovarPedidoLocal',
+        'recusarPedidoLocal',
         'baixarBackup',
         'restaurarBackup',
         'apagarEmpresa',

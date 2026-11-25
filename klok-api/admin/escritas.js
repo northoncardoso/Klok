@@ -1,6 +1,7 @@
 import { MINIMO_SENHA } from '../controladores/coordenadores.js';
 import { prepararDadosFuncionario } from '../controladores/funcionarios.js';
 import { PAPEL_COORDENADOR } from '../constantes.js';
+import { raioValido } from '../geolocalizacao.js';
 import { aprovarPedido, recusarPedido } from '../servicos/solicitacoes.js';
 import { codigoEmpresa, senha as senhaDe } from '../validacao.js';
 
@@ -157,6 +158,120 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         res.json({ sucesso: true });
     }
 
+    /**
+     * Buscar o pedido pendente e validar o raio antes de qualquer alteração.
+     * Devolve o pedido ou escreve a resposta de erro.
+     *
+     * @param {object} res Resposta HTTP.
+     * @param {object} banco Banco da empresa.
+     * @param {string|number} id Identificador do pedido.
+     * @returns {object|null} O pedido pendente, ou nulo quando a resposta já foi enviada.
+     */
+    function pedidoPendente(res, banco, id) {
+        const numero = Number(id);
+        if (!Number.isInteger(numero) || numero <= 0) {
+            res.status(404).json({ erro: 'Pedido não encontrado' });
+            return null;
+        }
+        const pedido = banco.buscarPedidoLocal(numero);
+        if (!pedido) {
+            res.status(404).json({ erro: 'Pedido não encontrado' });
+            return null;
+        }
+        if (pedido.status !== 'pendente') {
+            res.status(409).json({ erro: 'Pedido já foi decidido' });
+            return null;
+        }
+        if (!raioValido(pedido.raioMetros)) {
+            res.status(400).json({ erro: 'Raio precisa ficar entre 100 e 150 metros' });
+            return null;
+        }
+        return pedido;
+    }
+
+    /** Indicar se o erro do SQLite é violação de índice único. */
+    function ehConflitoDeUnicidade(erro) {
+        return erro?.errcode === 2067;
+    }
+
+    /**
+     * Aplicar o pedido de perímetro e decidir o pedido na mesma transação.
+     * Responde 200 com o local resultante, 400 em dado inválido, 404 quando o
+     * local alvo não existe, 409 no pedido já decidido, na exclusão do último
+     * perímetro ativo e no nome repetido.
+     */
+    function aprovarPedidoLocal(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (!responderAbertura(res, aberta)) return;
+
+        const banco = aberta.banco;
+        const pedido = pedidoPendente(res, banco, req.params.id);
+        if (!pedido) return;
+
+        const dados = {
+            nome: pedido.nome,
+            latitude: pedido.latitude,
+            longitude: pedido.longitude,
+            raioMetros: pedido.raioMetros,
+        };
+
+        let local = null;
+        if (pedido.tipo !== 'criar') {
+            const alvo = banco.buscarLocal(pedido.localId);
+            if (!alvo || alvo.removidoEm) {
+                return res.status(404).json({ erro: 'Local não encontrado' });
+            }
+            if (pedido.tipo === 'excluir' && banco.contarLocaisAtivos() <= 1) {
+                return res.status(409).json({ erro: 'Não é possível excluir o último perímetro ativo' });
+            }
+        }
+
+        try {
+            banco.emTransacao(() => {
+                if (pedido.tipo === 'criar') {
+                    local = banco.criarLocal(dados);
+                } else if (pedido.tipo === 'editar') {
+                    local = banco.atualizarLocal(pedido.localId, dados);
+                } else {
+                    local = banco.removerLocal(pedido.localId);
+                }
+                banco.decidirPedidoLocal(pedido.id, {
+                    status: 'aprovado',
+                    decididoPor: req.admin?.usuario ?? 'admin',
+                });
+            });
+        } catch (erro) {
+            if (ehConflitoDeUnicidade(erro)) {
+                return res.status(409).json({ erro: 'Já existe perímetro ativo com esse nome' });
+            }
+            throw erro;
+        }
+
+        res.json({ sucesso: true, local });
+    }
+
+    /**
+     * Recusar o pedido de perímetro, guardando o motivo opcional.
+     * Responde 200 em sucesso, 404 no pedido inexistente e 409 no pedido já
+     * decidido. O perímetro vigente não muda.
+     */
+    function recusarPedidoLocal(req, res) {
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (!responderAbertura(res, aberta)) return;
+
+        const banco = aberta.banco;
+        const pedido = pedidoPendente(res, banco, req.params.id);
+        if (!pedido) return;
+
+        const motivo = typeof req.body?.motivo === 'string' ? req.body.motivo.trim().slice(0, 500) : null;
+        banco.decidirPedidoLocal(pedido.id, {
+            status: 'recusado',
+            decididoPor: req.admin?.usuario ?? 'admin',
+            motivoRecusa: motivo || null,
+        });
+        res.json({ sucesso: true });
+    }
+
     // Apagar empresa é irreversível, então o cabeçalho obriga o operador a
     // digitar o código e evita derrubar a empresa errada.
     /** Apagar a empresa do catálogo e os arquivos do banco dela, exigindo o código repetido no cabeçalho de confirmação. */
@@ -177,6 +292,8 @@ export function criarEscritasAdmin({ gerenciador, gerarTokenEmpresa, enviarEmail
         apagarFuncionario,
         aprovarSolicitacao,
         recusarSolicitacao,
+        aprovarPedidoLocal,
+        recusarPedidoLocal,
         apagarEmpresa,
     };
 }

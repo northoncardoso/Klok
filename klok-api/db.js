@@ -725,8 +725,9 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     function listarPontosFiltrados({ limite = 200, pagina = 1, ...filtros } = {}) {
         const { onde, valores } = filtrosDePontos(filtros);
         const pontos = db.prepare(
-            `SELECT p.*, f.nome AS funcionarioNome
+            `SELECT p.*, f.nome AS funcionarioNome, l.nome AS localNome
              FROM pontos p JOIN funcionarios f ON f.id = p.funcionarioId
+             LEFT JOIN locais l ON l.id = p.localId
              ${onde}
              ORDER BY p.dataHora DESC, p.id DESC
              LIMIT ? OFFSET ?`
@@ -863,8 +864,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         const filtro = status ? 'WHERE p.status = ?' : '';
         const valores = status ? [status] : [];
         return db.prepare(
-            `SELECT p.*, u.usuario AS solicitanteUsuario, u.nome AS solicitanteNome
+            `SELECT p.*, u.usuario AS solicitanteUsuario, u.nome AS solicitanteNome,
+                    l.nome AS localNomeAtual, l.latitude AS localLatitudeAtual,
+                    l.longitude AS localLongitudeAtual, l.raioMetros AS localRaioMetrosAtual
              FROM pedidos_local p LEFT JOIN usuarios u ON u.id = p.solicitadoPor
+             LEFT JOIN locais l ON l.id = p.localId
              ${filtro} ORDER BY p.solicitadoEm, p.id`
         ).all(...valores);
     }
@@ -872,8 +876,11 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     /** Buscar um pedido de perímetro pelo id, com o autor. */
     function buscarPedidoLocal(id) {
         return db.prepare(
-            `SELECT p.*, u.usuario AS solicitanteUsuario, u.nome AS solicitanteNome
+            `SELECT p.*, u.usuario AS solicitanteUsuario, u.nome AS solicitanteNome,
+                    l.nome AS localNomeAtual, l.latitude AS localLatitudeAtual,
+                    l.longitude AS localLongitudeAtual, l.raioMetros AS localRaioMetrosAtual
              FROM pedidos_local p LEFT JOIN usuarios u ON u.id = p.solicitadoPor
+             LEFT JOIN locais l ON l.id = p.localId
              WHERE p.id = ?`
         ).get(Number(id));
     }

@@ -159,6 +159,8 @@
                                     <th>Funcionário</th>
                                     <th>Quando</th>
                                     <th>Tipo</th>
+                                    <th>Local</th>
+                                    <th>Situação</th>
                                 </tr>
                             </thead>
                             <tbody id="tabela-pontos"></tbody>
@@ -183,6 +185,32 @@
                                 </tr>
                             </thead>
                             <tbody id="tabela-solicitacoes"></tbody>
+                        </table>
+                    </div>
+
+                    <h3>Perímetros</h3>
+                    <p class="dica">
+                        Pedidos de criação, edição e exclusão enviados pelos coordenadores. O perímetro vigente só
+                        muda depois da aprovação.
+                    </p>
+                    <select id="pedido-local-status">
+                        <option value="pendente">Pendentes</option>
+                        <option value="aprovado">Aprovados</option>
+                        <option value="recusado">Recusados</option>
+                    </select>
+                    <div class="tabela-rolagem">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Vigente</th>
+                                    <th>Proposto</th>
+                                    <th>Solicitante</th>
+                                    <th>Solicitado em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-pedidos-locais"></tbody>
                         </table>
                     </div>
 

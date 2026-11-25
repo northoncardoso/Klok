@@ -35,6 +35,9 @@ export function criarRotaAdmin(deps) {
     rota.get('/empresas/:codigo/solicitacoes', autenticarAdmin, seguro(c.listarSolicitacoes));
     rota.post('/empresas/:codigo/solicitacoes/:id/aprovar', autenticarAdmin, seguro(c.aprovarSolicitacao));
     rota.post('/empresas/:codigo/solicitacoes/:id/recusar', autenticarAdmin, seguro(c.recusarSolicitacao));
+    rota.get('/empresas/:codigo/locais/pedidos', autenticarAdmin, seguro(c.listarPedidosLocais));
+    rota.post('/empresas/:codigo/locais/pedidos/:id/aprovar', autenticarAdmin, seguro(c.aprovarPedidoLocal));
+    rota.post('/empresas/:codigo/locais/pedidos/:id/recusar', autenticarAdmin, seguro(c.recusarPedidoLocal));
     rota.get('/empresas/:codigo/banco', autenticarAdmin, seguro(c.infoBanco));
     rota.get('/empresas/:codigo/banco/backup', autenticarAdmin, seguro(c.backup));
     // O express.json global não trata octet-stream, então o corpo binário chega
