@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 import type {
+    Coordenada,
     Coordenador,
     CoordenadorCriar,
     Funcionario,
@@ -287,8 +288,20 @@ export const api = {
      * @param {string} token Token do funcionário logado.
      * @returns {Promise<Ponto>} Ponto criado pelo backend.
      */
-    baterPonto: (tipo: string, token: string): Promise<Ponto> =>
-        requisicao<Ponto>('/api/pontos', 'POST', { tipo }, token),
+    baterPonto: (tipo: string, coordenada: Coordenada | null, token: string): Promise<Ponto> =>
+        requisicao<Ponto>(
+            '/api/pontos',
+            'POST',
+            coordenada
+                ? {
+                      tipo,
+                      latitude: coordenada.latitude,
+                      longitude: coordenada.longitude,
+                      precisaoMetros: coordenada.precisaoMetros,
+                  }
+                : { tipo },
+            token
+        ),
     /**
      * Listar os pontos do próprio usuário via GET /api/pontos/meus.
      *
