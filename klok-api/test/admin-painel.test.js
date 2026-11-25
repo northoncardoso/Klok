@@ -423,7 +423,9 @@ test('exporta funcionários e pontos em CSV', async (t) => {
     const pontos = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos.csv`, { headers: cabecalhos });
     assert.equal(pontos.status, 200);
     const textoPontos = await textoCsv(pontos);
-    assert.ok(textoPontos.startsWith('id;funcionario;dataHora;tipo\r\n'));
+    assert.ok(
+        textoPontos.startsWith('id;funcionario;dataHora;tipo;local;dentroPerimetro;distanciaMetros;precisaoMetros\r\n')
+    );
     assert.match(textoPontos, /Ana; Lima/);
 
     const invalido = await fetch(`${s.baseUrl}/api/admin/empresas/TESTE/pontos.csv?de=09/11/2026`, {
