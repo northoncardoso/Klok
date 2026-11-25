@@ -7,6 +7,9 @@ import type {
     CoordenadorCriar,
     Funcionario,
     FuncionarioCriar,
+    Local,
+    PedidoLocal,
+    PedidoLocalCriar,
     Ponto,
     RegistroUsuario,
     Sessao,
@@ -285,6 +288,7 @@ export const api = {
      * Registrar batida de ponto via POST /api/pontos.
      *
      * @param {string} tipo Tipo da batida, entrada ou saída.
+     * @param {Coordenada | null} coordenada Coordenada lida do GPS, ou null quando não há sinal.
      * @param {string} token Token do funcionário logado.
      * @returns {Promise<Ponto>} Ponto criado pelo backend.
      */
@@ -318,6 +322,23 @@ export const api = {
      */
     todosPontos: (token: string): Promise<Ponto[]> =>
         requisicao<Ponto[]>('/api/pontos', 'GET', null, token),
+    /**
+     * Listar os perímetros ativos e os pedidos pendentes via GET /api/locais.
+     *
+     * @param {string} token Token do coordenador.
+     * @returns {Promise<{ locais: Local[]; pendentes: PedidoLocal[] }>} Perímetros e pedidos pendentes.
+     */
+    listarLocais: (token: string): Promise<{ locais: Local[]; pendentes: PedidoLocal[] }> =>
+        requisicao<{ locais: Local[]; pendentes: PedidoLocal[] }>('/api/locais', 'GET', null, token),
+    /**
+     * Enviar pedido de criação, edição ou exclusão de perímetro via POST /api/locais/pedidos.
+     *
+     * @param {PedidoLocalCriar} dados Dados do pedido, submetidos à aprovação do administrador.
+     * @param {string} token Token do coordenador.
+     * @returns {Promise<PedidoLocal>} Pedido pendente criado.
+     */
+    pedirLocal: (dados: PedidoLocalCriar, token: string): Promise<PedidoLocal> =>
+        requisicao<PedidoLocal>('/api/locais/pedidos', 'POST', dados, token),
     /**
      * Listar solicitações filtradas por status via GET /api/solicitacoes.
      *
