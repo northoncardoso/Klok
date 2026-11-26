@@ -4,6 +4,9 @@
   "description": "Backend da Klok - gestão de funcionários com batida de ponto",
   "type": "module",
   "main": "server.js",
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
