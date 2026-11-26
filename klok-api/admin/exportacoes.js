@@ -269,13 +269,26 @@ export function criarExportacoesAdmin({ gerenciador }) {
             pagina: 1,
         });
 
-        const linhas = ['id;funcionario;dataHora;tipo'];
+        const linhas = ['id;funcionario;dataHora;tipo;local;dentroPerimetro;distanciaMetros;precisaoMetros'];
         for (const ponto of pontos) {
             // Data legível no fuso da empresa, sem a vírgula que o formato em português insere.
             const quando = new Date(ponto.dataHora)
                 .toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
                 .replace(', ', ' ');
-            linhas.push([ponto.id, ponto.funcionarioNome, quando, ponto.tipo].map(campoCsv).join(';'));
+            linhas.push(
+                [
+                    ponto.id,
+                    ponto.funcionarioNome,
+                    quando,
+                    ponto.tipo,
+                    ponto.localNome ?? '',
+                    ponto.dentroPerimetro ?? '',
+                    ponto.distanciaMetros ?? '',
+                    ponto.precisaoMetros ?? '',
+                ]
+                    .map(campoCsv)
+                    .join(';')
+            );
         }
         enviarCsv(res, nomeDoArquivo(aberta.empresa, 'pontos'), linhas);
     }

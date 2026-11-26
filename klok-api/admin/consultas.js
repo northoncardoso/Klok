@@ -4,6 +4,7 @@ import { codigoEmpresa } from '../validacao.js';
 import { dataIso, inteiroPositivo, paginacao } from './validacao-painel.js';
 
 const STATUS_SOLICITACAO = ['pendente', 'aprovado', 'recusado'];
+const STATUS_PEDIDO_LOCAL = ['pendente', 'aprovado', 'recusado'];
 
 // Consultas do painel de suporte. Elas abrem a empresa permitindo desativada,
 // porque o painel precisa inspecionar empresa desligada.
@@ -122,6 +123,23 @@ export function criarConsultasAdmin({ gerenciador }) {
         });
     }
 
+    /**
+     * Listar os pedidos de perímetro da empresa, com o autor, filtrados por
+     * status, pendente por padrão.
+     * @param {object} req query com status
+     * @param {object} res lista de pedidos
+     */
+    function listarPedidosLocais(req, res) {
+        const status = req.query.status || 'pendente';
+        if (!STATUS_PEDIDO_LOCAL.includes(status)) {
+            return res.status(400).json({ erro: 'Status inválido' });
+        }
+
+        const aberta = abrirParaAdmin(req.params.codigo);
+        if (!responderAbertura(res, aberta)) return;
+        res.json(aberta.banco.listarPedidosLocal(status));
+    }
+
     /** Informar caminho, versão de migração e tamanho em disco do banco da empresa. */
     function infoBanco(req, res) {
         const aberta = abrirParaAdmin(req.params.codigo);
@@ -148,6 +166,7 @@ export function criarConsultasAdmin({ gerenciador }) {
         listarFuncionarios,
         listarPontos,
         listarSolicitacoes,
+        listarPedidosLocais,
         infoBanco,
     };
 }

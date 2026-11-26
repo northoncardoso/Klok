@@ -29,6 +29,41 @@ export type Ponto = {
     funcionarioNome?: string;
 };
 
+export type Coordenada = {
+    latitude: number;
+    longitude: number;
+    precisaoMetros: number;
+};
+
+export type Local = {
+    id: number;
+    nome: string;
+    latitude: number;
+    longitude: number;
+    raioMetros: number;
+};
+
+export type PedidoLocal = {
+    id: number;
+    tipo: 'criar' | 'editar' | 'excluir';
+    localId: number | null;
+    nome: string;
+    latitude: number;
+    longitude: number;
+    raioMetros: number;
+    status: 'pendente' | 'aprovado' | 'recusado';
+    solicitadoEm: string;
+};
+
+export type PedidoLocalCriar = {
+    tipo: 'criar' | 'editar' | 'excluir';
+    localId?: number | null;
+    nome: string;
+    latitude: number;
+    longitude: number;
+    raioMetros: number;
+};
+
 export type RegistroUsuario = {
     sucesso: boolean;
     mensagem: string;

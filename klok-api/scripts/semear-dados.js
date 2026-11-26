@@ -25,6 +25,7 @@ const HOJE = new Date();
 const EMPRESAS = [
     {
         codigo: 'ACME',
+        local: { nome: 'Sede Atlas', latitude: -23.5505, longitude: -46.6333, raioMetros: 150 },
         nome: 'Atlas Comércio',
         ativa: true,
         coordenadores: [
@@ -43,6 +44,7 @@ const EMPRESAS = [
     },
     {
         codigo: 'GLOBEX',
+        local: { nome: 'Sede Globex', latitude: -22.9068, longitude: -43.1729, raioMetros: 150 },
         nome: 'Globex Tecnologia',
         ativa: true,
         coordenadores: [
@@ -60,6 +62,7 @@ const EMPRESAS = [
     },
     {
         codigo: 'INITECH',
+        local: { nome: 'Sede Initech', latitude: -19.9167, longitude: -43.9345, raioMetros: 150 },
         nome: 'Initech Serviços',
         ativa: true,
         coordenadores: [
@@ -75,6 +78,7 @@ const EMPRESAS = [
     },
     {
         codigo: 'UMBRELLA',
+        local: { nome: 'Sede Umbrella', latitude: -25.4284, longitude: -49.2733, raioMetros: 150 },
         nome: 'Umbrella Logística',
         ativa: false,
         coordenadores: [
@@ -185,6 +189,8 @@ function semearEmpresa(empresa) {
 
     const banco = criarBanco(caminho, { empresa: empresa.codigo });
     garantirSolicitacoes(banco);
+
+    if (empresa.local) banco.criarLocal(empresa.local);
 
     for (const [usuario, nome, email, numero] of empresa.coordenadores) {
         banco.criarCoordenador(usuario, SENHA, nome, email, numero);

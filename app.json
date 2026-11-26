@@ -16,7 +16,13 @@
     },
     "plugins": [
       "@react-native-google-signin/google-signin",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O Klok usa sua localização apenas para confirmar a batida de ponto."
+        }
+      ]
     ],
     "owner": "northoncardoso"
   }

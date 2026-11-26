@@ -141,6 +141,47 @@ export const MIGRACOES = [
             DROP TABLE migracao_coordenador;
         `,
     },
+    {
+        versao: 10,
+        nome: 'perímetros de batida e resultado da verificação',
+        sql: `
+            CREATE TABLE IF NOT EXISTS locais (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                raioMetros INTEGER NOT NULL DEFAULT 150,
+                criadoEm TEXT NOT NULL,
+                atualizadoEm TEXT,
+                removidoEm TEXT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_locais_nome_ativo
+                ON locais(nome) WHERE removidoEm IS NULL;
+
+            CREATE TABLE IF NOT EXISTS pedidos_local (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo TEXT NOT NULL,
+                localId INTEGER,
+                nome TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                raioMetros INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pendente',
+                solicitadoPor INTEGER NOT NULL,
+                solicitadoEm TEXT NOT NULL,
+                decididoPor TEXT,
+                decididoEm TEXT,
+                motivoRecusa TEXT,
+                FOREIGN KEY (localId) REFERENCES locais(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_pedidos_local_status ON pedidos_local(status);
+
+            ALTER TABLE pontos ADD COLUMN localId INTEGER;
+            ALTER TABLE pontos ADD COLUMN dentroPerimetro INTEGER;
+            ALTER TABLE pontos ADD COLUMN distanciaMetros INTEGER;
+            ALTER TABLE pontos ADD COLUMN precisaoMetros INTEGER;
+        `,
+    },
 ];
 
 /**
@@ -436,26 +477,38 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
      *
      * @returns {object} A linha do ponto recém criado.
      */
-    function baterPonto(funcionarioId, tipo) {
+    function baterPonto(funcionarioId, tipo, apuracao = null) {
         const dataHora = new Date().toISOString();
         const r = db.prepare(
-            'INSERT INTO pontos (funcionarioId, dataHora, tipo) VALUES (?, ?, ?)'
-        ).run(paraTexto(funcionarioId), dataHora, paraTexto(tipo));
+            `INSERT INTO pontos
+                (funcionarioId, dataHora, tipo, localId, dentroPerimetro, distanciaMetros, precisaoMetros)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+            paraTexto(funcionarioId),
+            dataHora,
+            paraTexto(tipo),
+            apuracao?.localId ?? null,
+            apuracao?.dentroPerimetro ?? null,
+            apuracao?.distanciaMetros ?? null,
+            apuracao?.precisaoMetros ?? null
+        );
         return db.prepare('SELECT * FROM pontos WHERE id = ?').get(r.lastInsertRowid);
     }
 
     /** Listar os pontos de um funcionário da tabela pontos, do mais recente para o mais antigo. */
     function listarPontos(funcionarioId) {
         return db.prepare(
-            'SELECT * FROM pontos WHERE funcionarioId = ? ORDER BY dataHora DESC'
+            `SELECT id, funcionarioId, dataHora, tipo
+             FROM pontos WHERE funcionarioId = ? ORDER BY dataHora DESC`
         ).all(funcionarioId);
     }
 
-    /** Listar todos os pontos com o nome do funcionário, do mais recente para o mais antigo. */
+    /** Listar todos os pontos com o nome do funcionário e a situação do perímetro. */
     function listarTodosPontos() {
         return db.prepare(
-            `SELECT p.*, f.nome AS funcionarioNome
+            `SELECT p.*, f.nome AS funcionarioNome, l.nome AS localNome
              FROM pontos p JOIN funcionarios f ON f.id = p.funcionarioId
+             LEFT JOIN locais l ON l.id = p.localId
              ORDER BY p.dataHora DESC`
         ).all();
     }
@@ -672,8 +725,9 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
     function listarPontosFiltrados({ limite = 200, pagina = 1, ...filtros } = {}) {
         const { onde, valores } = filtrosDePontos(filtros);
         const pontos = db.prepare(
-            `SELECT p.*, f.nome AS funcionarioNome
+            `SELECT p.*, f.nome AS funcionarioNome, l.nome AS localNome
              FROM pontos p JOIN funcionarios f ON f.id = p.funcionarioId
+             LEFT JOIN locais l ON l.id = p.localId
              ${onde}
              ORDER BY p.dataHora DESC, p.id DESC
              LIMIT ? OFFSET ?`
@@ -694,6 +748,197 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
             'SELECT * FROM solicitacoes WHERE status = ? ORDER BY criadoEm, id LIMIT ? OFFSET ?'
         ).all(status, Number(limite), (Number(pagina) - 1) * Number(limite)).map(semSenha);
         return { solicitacoes, total };
+    }
+
+    /**
+     * Inserir um perímetro ativo para a empresa.
+     *
+     * @param {object} dados Campo nome, latitude, longitude e raioMetros.
+     * @returns {object} A linha do local gravado.
+     */
+    function criarLocal({ nome, latitude, longitude, raioMetros = 150 } = {}) {
+        const r = db.prepare(
+            `INSERT INTO locais (nome, latitude, longitude, raioMetros, criadoEm)
+             VALUES (?, ?, ?, ?, ?)`
+        ).run(
+            paraTexto(nome),
+            Number(latitude),
+            Number(longitude),
+            Number(raioMetros),
+            new Date().toISOString()
+        );
+        return buscarLocal(r.lastInsertRowid);
+    }
+
+    /** Listar os perímetros ativos, do mais antigo para o mais novo. */
+    function listarLocais() {
+        return db
+            .prepare('SELECT * FROM locais WHERE removidoEm IS NULL ORDER BY id')
+            .all();
+    }
+
+    /** Buscar um perímetro pelo id, inclusive removido, para preservar o histórico. */
+    function buscarLocal(id) {
+        return db.prepare('SELECT * FROM locais WHERE id = ?').get(Number(id));
+    }
+
+    /**
+     * Sobrescrever nome, coordenada e raio de um perímetro ativo.
+     *
+     * @returns {object|undefined} A linha atualizada.
+     */
+    function atualizarLocal(id, { nome, latitude, longitude, raioMetros } = {}) {
+        db.prepare(
+            `UPDATE locais
+             SET nome = ?, latitude = ?, longitude = ?, raioMetros = ?, atualizadoEm = ?
+             WHERE id = ? AND removidoEm IS NULL`
+        ).run(
+            paraTexto(nome),
+            Number(latitude),
+            Number(longitude),
+            Number(raioMetros),
+            new Date().toISOString(),
+            Number(id)
+        );
+        return buscarLocal(id);
+    }
+
+    /**
+     * Marcar um perímetro como removido sem apagar a linha.
+     *
+     * @returns {object|undefined} A linha depois da remoção lógica.
+     */
+    function removerLocal(id) {
+        db.prepare(
+            'UPDATE locais SET removidoEm = ? WHERE id = ? AND removidoEm IS NULL'
+        ).run(new Date().toISOString(), Number(id));
+        return buscarLocal(id);
+    }
+
+    /** Contar os perímetros ativos da empresa. */
+    function contarLocaisAtivos() {
+        return Number(
+            db.prepare('SELECT COUNT(*) AS total FROM locais WHERE removidoEm IS NULL').get().total
+        );
+    }
+
+    /**
+     * Gravar um pedido de perímetro pendente.
+     *
+     * @param {object} dados Campo tipo, localId, nome, latitude, longitude, raioMetros e solicitadoPor.
+     * @returns {object} O pedido gravado.
+     */
+    function criarPedidoLocal({
+        tipo,
+        localId = null,
+        nome,
+        latitude,
+        longitude,
+        raioMetros,
+        solicitadoPor,
+    } = {}) {
+        const r = db.prepare(
+            `INSERT INTO pedidos_local
+                (tipo, localId, nome, latitude, longitude, raioMetros, status, solicitadoPor, solicitadoEm)
+             VALUES (?, ?, ?, ?, ?, ?, 'pendente', ?, ?)`
+        ).run(
+            paraTexto(tipo),
+            localId == null ? null : Number(localId),
+            paraTexto(nome),
+            Number(latitude),
+            Number(longitude),
+            Number(raioMetros),
+            Number(solicitadoPor),
+            new Date().toISOString()
+        );
+        return buscarPedidoLocal(r.lastInsertRowid);
+    }
+
+    /**
+     * Listar pedidos de perímetro, opcionalmente por status, com o autor.
+     *
+     * @param {string} [status] Status desejado, ou nada para todos.
+     * @returns {object[]} Pedidos encontrados.
+     */
+    function listarPedidosLocal(status) {
+        const filtro = status ? 'WHERE p.status = ?' : '';
+        const valores = status ? [status] : [];
+        return db.prepare(
+            `SELECT p.*, u.usuario AS solicitanteUsuario, u.nome AS solicitanteNome,
+                    l.nome AS localNomeAtual, l.latitude AS localLatitudeAtual,
+                    l.longitude AS localLongitudeAtual, l.raioMetros AS localRaioMetrosAtual
+             FROM pedidos_local p LEFT JOIN usuarios u ON u.id = p.solicitadoPor
+             LEFT JOIN locais l ON l.id = p.localId
+             ${filtro} ORDER BY p.solicitadoEm, p.id`
+        ).all(...valores);
+    }
+
+    /** Buscar um pedido de perímetro pelo id, com o autor. */
+    function buscarPedidoLocal(id) {
+        return db.prepare(
+            `SELECT p.*, u.usuario AS solicitanteUsuario, u.nome AS solicitanteNome,
+                    l.nome AS localNomeAtual, l.latitude AS localLatitudeAtual,
+                    l.longitude AS localLongitudeAtual, l.raioMetros AS localRaioMetrosAtual
+             FROM pedidos_local p LEFT JOIN usuarios u ON u.id = p.solicitadoPor
+             LEFT JOIN locais l ON l.id = p.localId
+             WHERE p.id = ?`
+        ).get(Number(id));
+    }
+
+    /**
+     * Decidir um pedido pendente, gravando autor e motivo da recusa.
+     *
+     * @returns {object|undefined} O pedido depois da decisão.
+     */
+    function decidirPedidoLocal(id, { status, decididoPor, motivoRecusa = null } = {}) {
+        db.prepare(
+            `UPDATE pedidos_local
+             SET status = ?, decididoPor = ?, decididoEm = ?, motivoRecusa = ?
+             WHERE id = ? AND status = 'pendente'`
+        ).run(
+            paraTexto(status),
+            paraTexto(decididoPor),
+            new Date().toISOString(),
+            paraTexto(motivoRecusa) || null,
+            Number(id)
+        );
+        return buscarPedidoLocal(id);
+    }
+
+    /** Indicar se existe pedido de criação de perímetro pendente. */
+    function existePedidoCriacaoPendente() {
+        return Boolean(
+            db.prepare(
+                "SELECT 1 FROM pedidos_local WHERE tipo = 'criar' AND status = 'pendente' LIMIT 1"
+            ).get()
+        );
+    }
+
+    /** Indicar se existe pedido pendente para o local informado. */
+    function existePedidoPendenteParaLocal(localId) {
+        return Boolean(
+            db.prepare(
+                "SELECT 1 FROM pedidos_local WHERE localId = ? AND status = 'pendente' LIMIT 1"
+            ).get(Number(localId))
+        );
+    }
+
+    /**
+     * Executar uma função dentro de uma transação.
+     *
+     * @param {Function} fn Função síncrona que usa o banco.
+     * @returns {unknown} O retorno da função.
+     */
+    function emTransacao(fn) {
+        db.exec('BEGIN');
+        try {
+            const resultado = fn();
+            db.exec('COMMIT');
+            return resultado;
+        } catch (e) {
+            db.exec('ROLLBACK');
+            throw e;
+        }
     }
 
     return {
@@ -739,5 +984,18 @@ export function criarBanco(caminho = 'klok.db', opcoes = {}) {
         contarPontosFiltrados,
         listarPontosFiltrados,
         listarSolicitacoesPaginado,
+        listarLocais,
+        buscarLocal,
+        criarLocal,
+        atualizarLocal,
+        removerLocal,
+        contarLocaisAtivos,
+        listarPedidosLocal,
+        buscarPedidoLocal,
+        criarPedidoLocal,
+        decidirPedidoLocal,
+        existePedidoCriacaoPendente,
+        existePedidoPendenteParaLocal,
+        emTransacao,
     };
 }

@@ -307,7 +307,13 @@ function linhaVazia(corpo, colunas, texto) {
  * é descartado, porque os dois eram da empresa anterior.
  */
 function limparDadosDaEmpresa() {
-    for (const id of ['tabela-coordenadores', 'tabela-funcionarios', 'tabela-pontos', 'tabela-solicitacoes']) {
+    for (const id of [
+        'tabela-coordenadores',
+        'tabela-funcionarios',
+        'tabela-pontos',
+        'tabela-solicitacoes',
+        'tabela-pedidos-locais',
+    ]) {
         porId(id).textContent = '';
     }
     // Zerar o filtro de funcionário evita mandar id de uma empresa para a outra.
@@ -477,6 +483,7 @@ function selecionarEmpresa(codigo) {
     carregarFuncionarios();
     carregarPontos(1);
     carregarSolicitacoes();
+    carregarPedidosLocais();
     carregarBanco();
 }
 
@@ -653,14 +660,16 @@ async function carregarPontos(pagina = 1) {
         const corpo = porId('tabela-pontos');
         corpo.textContent = '';
         if (pontos.length === 0) {
-            linhaVazia(corpo, 3, 'Nenhum ponto no filtro.');
+            linhaVazia(corpo, 5, 'Nenhum ponto no filtro.');
         } else {
             for (const ponto of pontos) {
                 const linha = document.createElement('tr');
                 linha.append(
                     celulaTexto(ponto.funcionarioNome),
                     celulaTexto(formatarDataHora(ponto.dataHora)),
-                    celulaTexto(ponto.tipo)
+                    celulaTexto(ponto.tipo),
+                    celulaTexto(ponto.localNome),
+                    celulaTexto(situacaoDoPonto(ponto))
                 );
                 corpo.append(linha);
             }
@@ -737,6 +746,173 @@ async function carregarSolicitacoes() {
         if (!aindaSelecionada(empresa.codigo)) return;
         mensagem('mensagem-empresa', erro.message);
     }
+}
+
+const VAZIO_POR_STATUS_LOCAL = {
+    pendente: 'Nenhum pedido de perímetro pendente.',
+    aprovado: 'Nenhum pedido de perímetro aprovado.',
+    recusado: 'Nenhum pedido de perímetro recusado.',
+};
+
+const ROTULO_TIPO_LOCAL = {
+    criar: 'Criação',
+    editar: 'Edição',
+    excluir: 'Exclusão',
+};
+
+/**
+ * Traduzir o resultado da apuração para o texto exibido na lista de pontos.
+ *
+ * Nulo em `dentroPerimetro` é indeterminado quando houve precisão registrada e
+ * sem coordenada quando a batida foi enviada sem posição.
+ * @param {object} ponto linha de ponto vinda do painel
+ * @returns {string} Dentro, Fora, Indeterminado ou Sem coordenada
+ */
+function situacaoDoPonto(ponto) {
+    if (ponto.dentroPerimetro === 1) return 'Dentro';
+    if (ponto.dentroPerimetro === 0) return 'Fora';
+    if (ponto.precisaoMetros === null || ponto.precisaoMetros === undefined) return 'Sem coordenada';
+    return 'Indeterminado';
+}
+
+/**
+ * Descrever um perímetro com nome, coordenadas e raio para a tabela de pedidos.
+ * @param {string|null} nome
+ * @param {number|null} latitude
+ * @param {number|null} longitude
+ * @param {number|null} raioMetros
+ * @returns {string} descrição pronta, ou vazio quando não há nome
+ */
+function descreverLocal(nome, latitude, longitude, raioMetros) {
+    if (nome === null || nome === undefined) return '';
+    const coordenadas = `${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`;
+    return `${nome} (${coordenadas}, ${raioMetros} m)`;
+}
+
+/**
+ * Buscar os pedidos de perímetro do status escolhido e montar a tabela, com os
+ * valores vigente e proposto e as ações apenas nos pendentes.
+ */
+async function carregarPedidosLocais() {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const status = porId('pedido-local-status').value || 'pendente';
+
+    try {
+        const dados =
+            (await api(
+                `/api/admin/empresas/${encodeURIComponent(empresa.codigo)}/locais/pedidos?status=${encodeURIComponent(status)}`
+            )) ?? [];
+        if (!aindaSelecionada(empresa.codigo)) return;
+
+        const pedidos = Array.isArray(dados) ? dados : [];
+        const corpo = porId('tabela-pedidos-locais');
+        corpo.textContent = '';
+        if (pedidos.length === 0) {
+            linhaVazia(corpo, 6, VAZIO_POR_STATUS_LOCAL[status] ?? 'Nenhum pedido.');
+            return;
+        }
+
+        for (const pedido of pedidos) {
+            const linha = document.createElement('tr');
+            const acoes = celulaAcoes();
+
+            if (pedido.status === 'pendente') {
+                const aprovar = botaoAcao('Aprovar');
+                aprovar.addEventListener('click', () => aprovarPedidoLocal(pedido.id, aprovar));
+
+                const recusar = botaoAcao('Recusar', 'perigo');
+                recusar.addEventListener('click', () => recusarPedidoLocal(pedido.id, recusar));
+
+                acoes.append(aprovar, recusar);
+            }
+
+            const vigente =
+                pedido.tipo === 'criar'
+                    ? ''
+                    : descreverLocal(
+                          pedido.localNomeAtual,
+                          pedido.localLatitudeAtual,
+                          pedido.localLongitudeAtual,
+                          pedido.localRaioMetrosAtual
+                      );
+            const proposto =
+                pedido.tipo === 'excluir'
+                    ? `Excluir ${pedido.localNomeAtual ?? pedido.nome}`
+                    : descreverLocal(pedido.nome, pedido.latitude, pedido.longitude, pedido.raioMetros);
+
+            linha.append(
+                celulaTexto(ROTULO_TIPO_LOCAL[pedido.tipo] ?? pedido.tipo),
+                celulaTexto(vigente),
+                celulaTexto(proposto),
+                celulaTexto(pedido.solicitanteNome ?? pedido.solicitanteUsuario),
+                celulaTexto(formatarDataHora(pedido.solicitadoEm)),
+                acoes
+            );
+            corpo.append(linha);
+        }
+    } catch (erro) {
+        if (!aindaSelecionada(empresa.codigo)) return;
+        mensagem('mensagem-empresa', erro.message);
+    }
+}
+
+/**
+ * Aprovar ou recusar um pedido de perímetro, pedindo o motivo na recusa, e
+ * recarregar a tabela e o resumo.
+ * @param {number} id id do pedido
+ * @param {string} decisao aprovar ou recusar
+ * @param {HTMLButtonElement} botao botão que fica desabilitado durante a chamada
+ * @returns {Promise<void>}
+ */
+async function decidirPedidoLocal(id, decisao, botao) {
+    const empresa = estado.selecionada;
+    if (!empresa) return;
+
+    const pergunta =
+        decisao === 'aprovar'
+            ? 'Aprovar este pedido de perímetro? A alteração vale para as próximas batidas.'
+            : 'Recusar este pedido de perímetro?';
+    if (!window.confirm(pergunta)) return;
+
+    let motivo = null;
+    if (decisao === 'recusar') {
+        const resposta = window.prompt('Motivo da recusa (opcional):', '');
+        if (resposta === null) return;
+        motivo = resposta.trim() || null;
+    }
+
+    mensagem('mensagem-empresa', '');
+    await comBotao(botao, async () => {
+        try {
+            await api(caminhoDaEmpresa(empresa, `/locais/pedidos/${id}/${decisao}`), {
+                method: 'POST',
+                corpo: motivo ? { motivo } : {},
+            });
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem(
+                'mensagem-empresa',
+                decisao === 'aprovar' ? 'Pedido de perímetro aprovado.' : 'Pedido de perímetro recusado.',
+                'ok'
+            );
+            carregarPedidosLocais();
+            carregarResumo();
+        } catch (erro) {
+            if (!aindaSelecionada(empresa.codigo)) return;
+            mensagem('mensagem-empresa', erro.message);
+        }
+    });
+}
+
+/** Encaminhar o pedido de perímetro para a aprovação. */
+function aprovarPedidoLocal(id, botao) {
+    return decidirPedidoLocal(id, 'aprovar', botao);
+}
+
+/** Encaminhar o pedido de perímetro para a recusa. */
+function recusarPedidoLocal(id, botao) {
+    return decidirPedidoLocal(id, 'recusar', botao);
 }
 
 /** Buscar versão e tamanho do banco da empresa e mostrar no cartão de banco. */
@@ -1347,6 +1523,10 @@ porId('ponto-proximo').addEventListener('click', () => {
 
 porId('solicitacao-status').addEventListener('change', () => {
     carregarSolicitacoes();
+});
+
+porId('pedido-local-status').addEventListener('change', () => {
+    carregarPedidosLocais();
 });
 
 porId('botao-backup').addEventListener('click', (evento) => baixarBackup(evento.currentTarget));

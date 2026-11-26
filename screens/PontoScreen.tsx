@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ScrollView, Linking } from 'react-native';
 import estilos from '../estilos';
 import { api, mensagemDeErro } from '../api';
+import { obterCoordenada } from '../localizacao';
 import type { Ponto } from '../types';
 
 type PontoScreenProps = {
@@ -59,13 +60,38 @@ export default function PontoScreen({ token }: PontoScreenProps) {
 
     /**
      * Registrar a batida com POST /api/pontos e recarregar o histórico.
-     * Enquanto envia, o botão fica desabilitado com o texto "Registrando...", o que barra toque duplo.
-     * Ao dar certo, um Alert confirma o horário registrado. Se falhar, o Alert mostra a mensagem do servidor.
+     *
+     * A coordenada é lida antes do envio. Serviço desligado e permissão negada
+     * abrem o aviso com o atalho para as configurações do sistema. Ausência de
+     * sinal registra o ponto sem coordenada e avisa que ela não foi verificada.
+     * Enquanto envia, o botão fica desabilitado com o texto "Registrando...", o
+     * que barra toque duplo.
      */
     const baterPonto = async () => {
         setCarregando(true);
         try {
-            await api.baterPonto('batida', token);
+            const coordenada = await obterCoordenada();
+
+            if ('motivo' in coordenada) {
+                if (coordenada.motivo === 'sinal') {
+                    await api.baterPonto('batida', null, token);
+                    Alert.alert('Ponto registrado', 'Ponto registrado sem coordenada verificada.');
+                    await carregarPontos();
+                    return;
+                }
+
+                const texto =
+                    coordenada.motivo === 'servico'
+                        ? 'Ative o serviço de localização do aparelho para bater o ponto.'
+                        : 'Permita o acesso à localização para bater o ponto.';
+                Alert.alert('Localização necessária', texto, [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Abrir configurações', onPress: () => Linking.openSettings() },
+                ]);
+                return;
+            }
+
+            await api.baterPonto('batida', coordenada, token);
             Alert.alert('Ponto Registrado', `Ponto batido às ${formatarHora(new Date())}`);
             await carregarPontos();
         } catch (e) {
@@ -79,6 +105,10 @@ export default function PontoScreen({ token }: PontoScreenProps) {
         <ScrollView contentContainerStyle={estilos.estilosPontoContainer}>
             <Text style={estilos.estilosPontoDataTexto}>{formatarData(horaAtual)}</Text>
             <Text style={estilos.estilosPontoRelogioTexto}>{formatarHora(horaAtual)}</Text>
+
+            <Text style={{ color: 'gray', fontSize: 14, textAlign: 'center', marginBottom: 12 }}>
+                Bata o ponto dentro dos perímetros da sua empresa
+            </Text>
 
             <TouchableOpacity
                 style={estilos.estilosPontoBotaoBaterPonto}

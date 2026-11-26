@@ -15,13 +15,21 @@ import HomeScreen from './screens/HomeScreen';
 import FuncionariosScreen from './screens/FuncionariosScreen';
 import CoordenadoresScreen from './screens/CoordenadoresScreen';
 import SolicitacoesScreen from './screens/SolicitacoesScreen';
+import CoordenadasScreen from './screens/CoordenadasScreen';
 import PontoScreen from './screens/PontoScreen';
 import RedefinirSenhaScreen from './screens/RedefinirSenhaScreen';
 import UsuarioScreen from './screens/UsuarioScreen';
 import { api, lerSessao, limparSessao, mensagemDeErro, salvarEmpresa, salvarSessao } from './api';
 import type { Sessao } from './types';
 
-type Tela = 'Home' | 'Funcionarios' | 'Coordenadores' | 'Solicitacoes' | 'Bater o ponto' | 'Usuario';
+type Tela =
+    | 'Home'
+    | 'Funcionarios'
+    | 'Coordenadores'
+    | 'Solicitacoes'
+    | 'Coordenadas'
+    | 'Bater o ponto'
+    | 'Usuario';
 type Portao =
     | { estado: 'carregando' }
     | { estado: 'pronto' }
@@ -236,6 +244,8 @@ export default function App() {
                 ) : null;
             case 'Bater o ponto':
                 return <PontoScreen token={sessao.token} />;
+            case 'Coordenadas':
+                return sessao.tipo === 'coordenador' ? <CoordenadasScreen token={sessao.token} /> : null;
             case 'Usuario':
                 return <UsuarioScreen token={sessao.token} aoAtualizarNome={atualizarNomeSessao} />;
             default:
@@ -327,6 +337,12 @@ export default function App() {
                                 <Text style={estilos.estilosMenuTextoItemMenu}>
                                     {pendentes > 0 ? `Solicitações (${pendentes})` : 'Solicitações'}
                                 </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {sessao?.tipo === 'coordenador' && (
+                            <TouchableOpacity style={estilos.estilosMenuItemMenu} onPress={() => irPara('Coordenadas')}>
+                                <Text style={estilos.estilosMenuTextoItemMenu}>Configuração de Coordenadas</Text>
                             </TouchableOpacity>
                         )}
 

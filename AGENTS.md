@@ -51,6 +51,9 @@ git.
 - Responder em português (PT-BR), tom direto.
 - Em texto gerado (comentários, docs, mensagens de commit), não usar hífen nem
   travessão. Preferir vírgulas, dois pontos ou frases curtas.
+- Textos publicados no Git (títulos e corpos de issue, mensagens de commit e de
+  PR) devem ser formais, impessoais e técnicos, com voz passiva ou terceira
+  pessoa, sem gírias, sem primeira pessoa e sem expressões coloquiais.
 - Antes de usar qualquer biblioteca ou recurso, conferir se está atual e não foi
   descontinuado.
 
@@ -65,9 +68,11 @@ git.
 ## Pendências conhecidas (issues abertas)
 
 - #8: prints do app no README.
-- #31: multiempresa parte 2, autocadastro com pedido, aprovação e aviso.
-- #32: multiempresa parte 3, suporte e resumo no painel.
 - #20: limpeza menor (console.log, engines, .nvmrc, arquivos .db fora do git).
+- #44: geolocalização na batida de ponto com perímetro por empresa, entregue no
+  PR #53, com o mapa pendente na #47.
+- #45: auditoria de ações administrativas, depois da geolocalização.
+- #47: mapa dos perímetros da empresa.
 
 ## Programa de trabalho em andamento
 
@@ -102,3 +107,13 @@ Ordem aprovada, cada bloco com seu design e seu plano.
   e apagar funcionário de coordenador devolve 409. Design em
   `docs/superpowers/specs/2026-11-17-coordenador-bate-ponto-design.md` e plano em
   `docs/superpowers/plans/2026-11-17-coordenador-bate-ponto.md`.
+- I. Geolocalização na batida de ponto com perímetro por empresa (#44, blocos
+  #49, #51, #48, #50, #52 e #46). Implementada na branch
+  `feat/geolocalizacao-ponto`, com a especificação de design em
+  `docs/superpowers/specs/2026-11-24-geolocalizacao-ponto-design.md` e o plano em
+  `docs/superpowers/plans/2026-11-24-geolocalizacao-ponto.md`. A migração 10 criou
+  `locais` e `pedidos_local`, a apuração Haversine roda no servidor com descarte da
+  coordenada, o painel aprova e recusa pedidos e o aplicativo exige GPS na batida e
+  tem a tela Configuração de Coordenadas. PR #53 mergeado com a CI verde. A primeira
+  versão não tem mapa; o mapa dos perímetros permanece na #47.
+- J. Auditoria de ações administrativas (#45), depois da geolocalização.
