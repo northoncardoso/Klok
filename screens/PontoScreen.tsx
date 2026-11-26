@@ -26,14 +26,14 @@ export default function PontoScreen({ token }: PontoScreenProps) {
 
     /**
      * Buscar em GET /api/pontos/meus o histórico de quem está logado.
-     * A falha vai só para o console, sem Alert, porque o histórico é secundário nesta tela.
+     * A falha é ignorada sem interromper a tela, porque o histórico é secundário.
      */
     const carregarPontos = async () => {
         try {
             const lista = await api.meusPontos(token);
             setPontos(lista);
-        } catch (e) {
-            console.log('Erro ao carregar pontos:', mensagemDeErro(e));
+        } catch {
+            // Sem aviso: o histórico é secundário e a batida continua disponível.
         }
     };
 
